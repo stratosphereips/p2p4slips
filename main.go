@@ -6,7 +6,9 @@ import (
 	"crypto/rand"
 	"flag"
 	"fmt"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"os"
+	"time"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -16,23 +18,25 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
-func handleStream(stream network.Stream) {
-	fmt.Println("Got a new stream!")
+func doPing(stream network.Stream) {
+	fmt.Println("I am listening!")
+	peer := stream.Conn().RemotePeer()
+	fmt.Println("The peer is", peer)
 
 	// Create a buffer stream for non blocking read and write.
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 
-	go readData(rw)
-	go writeData(rw)
+	go listen(rw, peer)
 
 	// 'stream' will stay open until you close it (or the other side closes it).
 }
 
-func readData(rw *bufio.ReadWriter) {
+func listen(rw *bufio.ReadWriter, peer peer.ID) {
 	for {
 		str, err := rw.ReadString('\n')
 		if err != nil {
 			fmt.Println("Error reading from buffer")
+			// TODO: instead of panic, disconnect and stop listening
 			panic(err)
 		}
 
@@ -42,24 +46,20 @@ func readData(rw *bufio.ReadWriter) {
 		if str != "\n" {
 			// Green console colour: 	\x1b[32m
 			// Reset console colour: 	\x1b[0m
-			fmt.Printf("\x1b[32m%s\x1b[0m> ", str)
+			fmt.Println(peer, ": ", str)
 		}
 
 	}
 }
 
-func writeData(rw *bufio.ReadWriter) {
-	stdReader := bufio.NewReader(os.Stdin)
-
+func ping(rw *bufio.ReadWriter) {
 	for {
-		fmt.Print("> ")
-		sendData, err := stdReader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Error reading from stdin")
-			panic(err)
-		}
+		fmt.Println("Sending ping")
+		var sendData string
 
-		_, err = rw.WriteString(fmt.Sprintf("%s\n", sendData))
+		sendData = "I am up!\n"
+
+		_, err := rw.WriteString(fmt.Sprintf("%s\n", sendData))
 		if err != nil {
 			fmt.Println("Error writing to buffer")
 			panic(err)
@@ -69,6 +69,7 @@ func writeData(rw *bufio.ReadWriter) {
 			fmt.Println("Error flushing buffer")
 			panic(err)
 		}
+		time.Sleep(10 * time.Second)
 	}
 }
 
@@ -111,7 +112,7 @@ func main() {
 
 	// Set a function as stream handler.
 	// This function is called when a peer initiates a connection and starts a stream with this peer.
-	host.SetStreamHandler(protocol.ID(cfg.ProtocolID), handleStream)
+	host.SetStreamHandler(protocol.ID(cfg.ProtocolID), doPing)
 
 	fmt.Printf("\n[*] Your Multiaddress Is: /ip4/%s/tcp/%v/p2p/%s\n", cfg.listenHost, cfg.listenPort, host.ID().Pretty())
 
@@ -132,9 +133,9 @@ func main() {
 	} else {
 		rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 
-		go writeData(rw)
-		go readData(rw)
 		fmt.Println("Connected to:", peer)
+		fmt.Println("I am talking!")
+		go ping(rw)
 	}
 
 	select {} //wait here
