@@ -109,7 +109,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	go redisDemo()
+	// go redisDemo()
 
 	fmt.Printf("[*] Listening on: %s with port: %d\n", cfg.listenHost, cfg.listenPort)
 
