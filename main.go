@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"flag"
 	"fmt"
+	"github.com/go-redis/redis/v7"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"os"
 	"time"
@@ -73,6 +74,30 @@ func ping(rw *bufio.ReadWriter) {
 	}
 }
 
+func redisDemo(){
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+
+	pubsub := rdb.Subscribe("new_ip")
+
+	// Wait for confirmation that subscription is created before publishing anything.
+	_, err := pubsub.Receive()
+	if err != nil {
+		panic(err)
+	}
+
+	// Go channel which receives messages.
+	ch := pubsub.Channel()
+
+	// Consume messages.
+	for msg := range ch {
+		fmt.Println(msg.Channel, msg.Payload)
+	}
+}
+
 func main() {
 	help := flag.Bool("help", false, "Display Help")
 	cfg := parseFlags()
@@ -83,6 +108,8 @@ func main() {
 
 		os.Exit(0)
 	}
+
+	go redisDemo()
 
 	fmt.Printf("[*] Listening on: %s with port: %d\n", cfg.listenHost, cfg.listenPort)
 
