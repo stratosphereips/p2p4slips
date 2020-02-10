@@ -18,10 +18,9 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
-func doPing(stream network.Stream) {
-	fmt.Println("I am listening!")
+func waitForConnections(stream network.Stream) {
 	peer := stream.Conn().RemotePeer()
-	fmt.Println("The peer is", peer)
+	fmt.Println("<<< The peer is", peer)
 
 	// Create a buffer stream for non blocking read and write.
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
@@ -54,7 +53,7 @@ func listen(rw *bufio.ReadWriter, peer peer.ID) {
 
 func ping(rw *bufio.ReadWriter) {
 	for {
-		fmt.Println("Sending ping")
+		// fmt.Println("Sending ping")
 		var sendData string
 
 		sendData = "I am up!\n"
@@ -69,6 +68,7 @@ func ping(rw *bufio.ReadWriter) {
 			fmt.Println("Error flushing buffer")
 			panic(err)
 		}
+		return
 		time.Sleep(10 * time.Second)
 	}
 }
@@ -112,31 +112,28 @@ func main() {
 
 	// Set a function as stream handler.
 	// This function is called when a peer initiates a connection and starts a stream with this peer.
-	host.SetStreamHandler(protocol.ID(cfg.ProtocolID), doPing)
+	host.SetStreamHandler(protocol.ID(cfg.ProtocolID), waitForConnections)
 
 	fmt.Printf("\n[*] Your Multiaddress Is: /ip4/%s/tcp/%v/p2p/%s\n", cfg.listenHost, cfg.listenPort, host.ID().Pretty())
 
 	peerChan := initMDNS(ctx, host, cfg.RendezvousString)
 
-	peer := <-peerChan // will block untill we discover a peer
-	fmt.Println("Found peer:", peer, ", connecting")
+	for {
+		peer := <-peerChan // will block until we discover a peer
+		fmt.Println(">>> Found peer:", peer, ", connecting")
 
-	if err := host.Connect(ctx, peer); err != nil {
-		fmt.Println("Connection failed:", err)
+		if err := host.Connect(ctx, peer); err != nil {
+			fmt.Println("Connection failed:", err)
+		}
+
+		// open a stream, this stream will be handled by handleStream other end
+		stream, err := host.NewStream(ctx, peer.ID, protocol.ID(cfg.ProtocolID))
+
+		if err != nil {
+			fmt.Println("Stream open failed", err)
+		} else {
+			rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+			go ping(rw)
+		}
 	}
-
-	// open a stream, this stream will be handled by handleStream other end
-	stream, err := host.NewStream(ctx, peer.ID, protocol.ID(cfg.ProtocolID))
-
-	if err != nil {
-		fmt.Println("Stream open failed", err)
-	} else {
-		rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-		fmt.Println("Connected to:", peer)
-		fmt.Println("I am talking!")
-		go ping(rw)
-	}
-
-	select {} //wait here
 }
