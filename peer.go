@@ -9,32 +9,37 @@ import (
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	"os"
 )
 
 type Peer struct {
 	rdb *redis.Client
 	host host.Host
-	port string
+	port int
 	hostname string
 	protocol string
 	dbAddress string
 	rendezVous string
 	ctx context.Context
+	canTalk bool
 }
 
 // dbInit function for a peer. It creates the database connection, starts listening for channels. It also initializes
 // everything needed for libp2p and sets up a Host that listens for new connections.
 // TODO: call this from somewhere?
-func peerInit() *Peer {
+func peerInit(canTalk bool, port int) *Peer {
 	var p Peer
-	p.port = "6666"
+	p.port = port
 	p.hostname = "0.0.0.0"
 	p.protocol = "/chat/1.1.0"
 	p.dbAddress = "localhost:6379"
+	p.canTalk = canTalk
 
 	// connect to the database
+	// TODO: not crashing when database is offline would be nice
 	p.rdb = redis.NewClient(&redis.Options{
 		Addr:     p.dbAddress,
 		Password: "", // no password set
@@ -42,17 +47,20 @@ func peerInit() *Peer {
 	})
 
 	// subscribe to SLIPS channel
-	redisSubscribe(&p)
+	go redisSubscribe(&p)
 
 	// prepare p2p host
 	p.host = p2pInit(p.hostname, p.port)
 
+	fmt.Println("setting handler")
 	// link to a listener for new connections
 	// TODO: this can't be tested that easily on localhost, as they will connect to the same db. Perhaps more redises?
 	// TODO: this needs access to the db object. It can be global or passed in a function:
 	// TODO:     https://stackoverflow.com/questions/26211954/how-do-i-pass-arguments-to-my-handler
-	// TODO: also call a different function instead
-	p.host.SetStreamHandler(protocol.ID(p.protocol), waitForConnections)
+	p.host.SetStreamHandler(protocol.ID(p.protocol), listener)
+
+
+	fmt.Println("foo")
 
 	// run peer discovery in the background
 	go discoverPeers(&p)
@@ -85,7 +93,7 @@ func redisSubscribe(p *Peer){
 	}
 }
 
-func p2pInit(ip string, port string) host.Host{
+func p2pInit(ip string, port int) host.Host{
 	ctx := context.Background()
 	r := rand.Reader
 
@@ -116,6 +124,7 @@ func p2pInit(ip string, port string) host.Host{
 }
 
 func discoverPeers(p *Peer){
+	fmt.Println("Looking for peers")
 
 	peerChan := initMDNS(p.ctx, p.host, p.rendezVous)
 
@@ -132,10 +141,68 @@ func discoverPeers(p *Peer){
 
 		if err != nil {
 			fmt.Println("Stream open failed", err)
-		} else {
+		} else if p.canTalk {
 			rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-			// TODO: change to custom function
-			go ping(rw)
+			go talker(rw)
+		}
+	}
+}
+
+func listener(stream network.Stream) {
+	peer := stream.Conn().RemotePeer()
+	fmt.Println("[", peer, "] A peer is contacting me")
+
+	// Create a buffer stream for non blocking read and write.
+	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+	str, err := rw.ReadString('\n')
+	if err != nil {
+		fmt.Println("Error reading from buffer")
+		// TODO: instead of panic, disconnect and stop listening
+		panic(err)
+	}
+
+	if str == "hello" {
+		fmt.Println("[", peer, "] says hello")
+		return
+	}
+
+	if str == "ping" {
+		fmt.Println("[", peer, "] says ping")
+		return
+	}
+
+	if str == "\n" {
+		fmt.Println("[", peer, "] sent an empty string")
+		return
+	}
+
+	// Green console colour: 	\x1b[32m
+	// Reset console colour: 	\x1b[0m
+	fmt.Println("[", peer, "] sent an unknown message: ", str)
+}
+
+func talker(rw *bufio.ReadWriter) {
+	stdReader := bufio.NewReader(os.Stdin)
+	fmt.Println("I am talking now")
+
+	for {
+		fmt.Print("> ")
+		sendData, err := stdReader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Error reading from stdin")
+			panic(err)
+		}
+
+		_, err = rw.WriteString(fmt.Sprintf("%s\n", sendData))
+		if err != nil {
+			fmt.Println("Error writing to buffer")
+			panic(err)
+		}
+		err = rw.Flush()
+		if err != nil {
+			fmt.Println("Error flushing buffer")
+			panic(err)
 		}
 	}
 }
