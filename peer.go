@@ -47,10 +47,10 @@ func peerInit(canTalk bool, port int) *Peer {
 	})
 
 	// prepare p2p host
-	p2pInit(&p)
+	p.p2pInit()
 
 	// subscribe to SLIPS channel
-	go redisSubscribe(&p)
+	go p.redisSubscribe()
 
 
 	fmt.Println("setting handler")
@@ -58,19 +58,18 @@ func peerInit(canTalk bool, port int) *Peer {
 	// TODO: this can't be tested that easily on localhost, as they will connect to the same db. Perhaps more redises?
 	// TODO: this needs access to the db object. It can be global or passed in a function:
 	// TODO:     https://stackoverflow.com/questions/26211954/how-do-i-pass-arguments-to-my-handler
-	p.host.SetStreamHandler(protocol.ID(p.protocol), listener)
-
+	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
 
 	fmt.Println("foo")
 
 	// run peer discovery in the background
-	go discoverPeers(&p)
+	go p.discoverPeers()
 	return &p
 }
 
 // subscribe to a channel and print all messages that arrive
 // taken from https://godoc.org/github.com/go-redis/redis#example-PubSub-Receive
-func redisSubscribe(p *Peer){
+func (p *Peer) redisSubscribe() {
 	pubsub := p.rdb.Subscribe("new_ip")
 
 	// Wait for confirmation that subscription is created before publishing anything.
@@ -94,7 +93,7 @@ func redisSubscribe(p *Peer){
 	}
 }
 
-func p2pInit(p *Peer){
+func (p *Peer) p2pInit() {
 	p.ctx = context.Background()
 	r := rand.Reader
 
@@ -122,7 +121,7 @@ func p2pInit(p *Peer){
 	fmt.Printf("\n[*] Your Multiaddress Is: /ip4/%s/tcp/%v/p2p/%s\n", p.hostname, p.port, p.host.ID().Pretty())
 }
 
-func discoverPeers(p *Peer){
+func (p *Peer) discoverPeers() {
 	fmt.Println("Looking for peers")
 
 	peerChan := initMDNS(p.ctx, p.host, p.rendezVous)
@@ -142,12 +141,12 @@ func discoverPeers(p *Peer){
 			fmt.Println("Stream open failed", err)
 		} else if p.canTalk {
 			rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-			go talker(rw)
+			go p.talker(rw)
 		}
 	}
 }
 
-func listener(stream network.Stream) {
+func (p *Peer) listener(stream network.Stream) {
 	peer := stream.Conn().RemotePeer()
 	fmt.Println("[", peer, "] A peer is contacting me")
 
@@ -185,7 +184,7 @@ func listener(stream network.Stream) {
 	fmt.Println("[", peer, "] sent an unknown message:", str)
 }
 
-func talker(rw *bufio.ReadWriter) {
+func (p *Peer) talker(rw *bufio.ReadWriter) {
 	stdReader := bufio.NewReader(os.Stdin)
 	fmt.Println("I am talking now")
 
