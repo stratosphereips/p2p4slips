@@ -46,11 +46,12 @@ func peerInit(canTalk bool, port int) *Peer {
 		DB:       0,  // use default DB
 	})
 
+	// prepare p2p host
+	p2pInit(&p)
+
 	// subscribe to SLIPS channel
 	go redisSubscribe(&p)
 
-	// prepare p2p host
-	p2pInit(&p)
 
 	fmt.Println("setting handler")
 	// link to a listener for new connections
@@ -154,6 +155,10 @@ func listener(stream network.Stream) {
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 
 	str, err := rw.ReadString('\n')
+
+	// remove trailing newlines
+	str = str[:len(str)-1]
+
 	if err != nil {
 		fmt.Println("Error reading from buffer")
 		// TODO: instead of panic, disconnect and stop listening
@@ -177,7 +182,7 @@ func listener(stream network.Stream) {
 
 	// Green console colour: 	\x1b[32m
 	// Reset console colour: 	\x1b[0m
-	fmt.Println("[", peer, "] sent an unknown message: ", str)
+	fmt.Println("[", peer, "] sent an unknown message:", str)
 }
 
 func talker(rw *bufio.ReadWriter) {
