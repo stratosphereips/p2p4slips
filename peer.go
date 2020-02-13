@@ -50,7 +50,7 @@ func peerInit(canTalk bool, port int) *Peer {
 	go redisSubscribe(&p)
 
 	// prepare p2p host
-	p.host = p2pInit(p.hostname, p.port)
+	p2pInit(&p)
 
 	fmt.Println("setting handler")
 	// link to a listener for new connections
@@ -93,8 +93,8 @@ func redisSubscribe(p *Peer){
 	}
 }
 
-func p2pInit(ip string, port int) host.Host{
-	ctx := context.Background()
+func p2pInit(p *Peer){
+	p.ctx = context.Background()
 	r := rand.Reader
 
 	// Creates a new RSA key pair for this host.
@@ -104,12 +104,12 @@ func p2pInit(ip string, port int) host.Host{
 	}
 
 	// 0.0.0.0 will listen on any interface device.
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, port))
+	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", p.hostname, p.port))
 
 	// libp2p.New constructs a new libp2p Host.
 	// Other options can be added here.
-	p2pHost, err := libp2p.New(
-		ctx,
+	p.host, err = libp2p.New(
+		p.ctx,
 		libp2p.ListenAddrs(sourceMultiAddr),
 		libp2p.Identity(prvKey),
 	)
@@ -118,9 +118,7 @@ func p2pInit(ip string, port int) host.Host{
 		panic(err)
 	}
 
-	fmt.Printf("\n[*] Your Multiaddress Is: /ip4/%s/tcp/%v/p2p/%s\n", ip, port, p2pHost.ID().Pretty())
-
-	return p2pHost
+	fmt.Printf("\n[*] Your Multiaddress Is: /ip4/%s/tcp/%v/p2p/%s\n", p.hostname, p.port, p.host.ID().Pretty())
 }
 
 func discoverPeers(p *Peer){
