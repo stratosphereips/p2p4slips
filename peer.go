@@ -4,16 +4,19 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v7"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
 	"os"
 	"strings"
+	"time"
 )
 
 type Peer struct {
@@ -131,23 +134,37 @@ func (p *Peer) discoverPeers() {
 	peerChan := initMDNS(p.ctx, p.host, p.rendezVous)
 
 	for {
-		peer := <-peerChan // will block until we discover a peer
-		fmt.Println(">>> Found peer:", peer, ", connecting")
+		peerAddress := <-peerChan // will block until we discover a peerAddress
+		peerid := peerAddress.ID.Pretty()
+		fmt.Println(">>> Found peerAddress:", peerid)
 
-		if err := p.host.Connect(p.ctx, peer); err != nil {
-			fmt.Println("Connection failed:", err)
+		if p.isKnown(peerid) {
+			fmt.Println("I know him already, skipping")
+			continue
+		} else {
+			fmt.Println("This is a new node, contacting him...")
 		}
 
-		// open a stream, this stream will be handled by handleStream other end
-		stream, err := p.host.NewStream(p.ctx, peer.ID, protocol.ID(p.protocol))
-
-		if err != nil {
-			fmt.Println("Stream open failed", err)
-		} else if p.canTalk {
-			rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-			go p.talker(rw)
-		}
+		go p.sayHello(peerAddress)
+		time.Sleep(2 * time.Second)
 	}
+}
+
+func (p *Peer) isKnown(peerid string) bool {
+	return p.rdb.HExists(p.rdhash, peerid).Val()
+}
+
+func (p *Peer) setReputation(reputation Reputation) {
+	data := reputation.rep2json()
+	fmt.Println("data", data)
+	p.rdb.HSet(p.rdhash, reputation.Peerid, data)
+}
+
+func (p *Peer) getReputation(peerid string) Reputation {
+	data := p.rdb.HGet(p.rdhash, peerid).Val()
+	reputation := Reputation{}
+	_ = json.Unmarshal([]byte(data), &reputation)
+	return reputation
 }
 
 func (p *Peer) talker(rw *bufio.ReadWriter) {
@@ -216,45 +233,86 @@ func (p *Peer) listener(stream network.Stream) {
 	fmt.Println("[", peer, "] sent an unknown message:", str)
 }
 
+func (p *Peer) sayHello(peerAddress peer.AddrInfo){
+	// add a simple record into db
+	reputation := Reputation{
+		Peerid:       peerAddress.ID.Pretty(),
+		Multiaddr:    peerAddress.String(),
+		Version:      "",
+		Interactions: nil,
+		Uptime:       nil,
+	}
+	p.setReputation(reputation)
+
+	if err := p.host.Connect(p.ctx, peerAddress); err != nil {
+		fmt.Println("Connection failed:", err)
+	}
+
+	// open a stream, this stream will be handled by handleStream other end
+	stream, err := p.host.NewStream(p.ctx, peerAddress.ID, protocol.ID(p.protocol))
+
+	if err != nil {
+		fmt.Println("Stream open failed", err)
+	}
+
+	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+	fmt.Println("Saying hello")
+	_, err = rw.WriteString("hello version1\n")
+	if err != nil {
+		fmt.Println("Error writing to buffer")
+		panic(err)
+	}
+	err = rw.Flush()
+	if err != nil {
+		fmt.Println("Error flushing buffer")
+		panic(err)
+	}
+}
+
 func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command *[]string){
-	// TODO: is there anything to say in the hello message
-	peer := stream.Conn().RemotePeer()
+	remotePeer := stream.Conn().RemotePeer()
+	peerid := remotePeer.Pretty()
+	remoteAddr := stream.Conn().RemoteMultiaddr().String()
 
-	// TODO: split this
-	// fmt.Println(stream.Conn().RemoteMultiaddr()) = /ip4/192.168.0.232/tcp/6667
-
-	peerid := peer.Pretty()
-	// peermultiaddr := stream.Conn().RemoteMultiaddr()
-
-	// if peer in db
-	a := p.rdb.HGet(p.rdhash, peerid)
-	fmt.Println("data in db:", a)
-	// lower his score, he is spamming
-
-	// otherwise
+	// parse contents of hello message
+	var remoteVersion string
 	if len(*command) != 2 {
-		// this should be here, lower his score
-		fmt.Println("no Version")
+		// TODO: malformed hello message, lower his score
+	} else {
+		remoteVersion = (*command)[1]
+	}
+
+	if !p.isKnown(peerid) {
+		// add a simple record into db
+		reputation := Reputation{
+			Peerid:       peerid,
+			Multiaddr:    remoteAddr,
+			Version:      remoteVersion,
+			Interactions: nil,
+			Uptime:       nil,
+		}
+		p.setReputation(reputation)
+
+		// say hello
+		rw.WriteString("hello version1\n")
 		return
 	}
 
-	// TODO: validate Version?
-	version := (*command)[1]
+	// if he is not known, check if his information is new
+	reputation := p.getReputation(peerid)
 
-	var reputation Reputation
-	reputation.Peerid = peerid
-	// TODO: fix this
-	//  reputation.multiaddr = string(peermultiaddr)
-	reputation.Version = version
+	if reputation.Version != remoteVersion {
+		// update this info
+		fmt.Println("updating version info")
+	}
 
-	data := reputation.rep2json()
-	fmt.Println("data", data)
+	if reputation.Multiaddr != remoteAddr {
+		// update this info
+		fmt.Println("updating address info")
+	}
 
-	p.rdb.HSet(p.rdhash, peerid, data)
-
-
-	a = p.rdb.HGet(p.rdhash, peerid)
-	fmt.Println("data in db:", a)
-
-	rw.WriteString("helloreply version3\n")
+	if reputation.Multiaddr == remoteAddr && reputation.Version == remoteVersion {
+		// lower his rep
+	}
 }
