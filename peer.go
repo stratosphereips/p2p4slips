@@ -13,10 +13,12 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
 	"os"
+	"strings"
 )
 
 type Peer struct {
 	rdb *redis.Client
+	rdhash string
 	host host.Host
 	port int
 	hostname string
@@ -48,6 +50,8 @@ func peerInit(canTalk bool, port int) *Peer {
 
 	// prepare p2p host
 	p.p2pInit()
+
+	p.rdhash = p.host.ID().Pretty()
 
 	// subscribe to SLIPS channel
 	go p.redisSubscribe()
@@ -146,44 +150,6 @@ func (p *Peer) discoverPeers() {
 	}
 }
 
-func (p *Peer) listener(stream network.Stream) {
-	peer := stream.Conn().RemotePeer()
-	fmt.Println("[", peer, "] A peer is contacting me")
-
-	// Create a buffer stream for non blocking read and write.
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-	str, err := rw.ReadString('\n')
-
-	// remove trailing newlines
-	str = str[:len(str)-1]
-
-	if err != nil {
-		fmt.Println("Error reading from buffer")
-		// TODO: instead of panic, disconnect and stop listening
-		panic(err)
-	}
-
-	if str == "hello" {
-		fmt.Println("[", peer, "] says hello")
-		return
-	}
-
-	if str == "ping" {
-		fmt.Println("[", peer, "] says ping")
-		return
-	}
-
-	if str == "\n" {
-		fmt.Println("[", peer, "] sent an empty string")
-		return
-	}
-
-	// Green console colour: 	\x1b[32m
-	// Reset console colour: 	\x1b[0m
-	fmt.Println("[", peer, "] sent an unknown message:", str)
-}
-
 func (p *Peer) talker(rw *bufio.ReadWriter) {
 	stdReader := bufio.NewReader(os.Stdin)
 	fmt.Println("I am talking now")
@@ -207,4 +173,88 @@ func (p *Peer) talker(rw *bufio.ReadWriter) {
 			panic(err)
 		}
 	}
+}
+
+func (p *Peer) listener(stream network.Stream) {
+	peer := stream.Conn().RemotePeer()
+	fmt.Println("[", peer, "] A peer is contacting me")
+
+	// Create a buffer stream for non blocking read and write.
+	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+	str, err := rw.ReadString('\n')
+
+	// remove trailing newlines
+	str = str[:len(str)-1]
+
+	if err != nil {
+		fmt.Println("Error reading from buffer")
+		// TODO: instead of panic, disconnect and stop listening
+		panic(err)
+	}
+
+	commands := strings.Fields(str)
+
+	if commands[0] == "hello" {
+		fmt.Println("[", peer, "] says hello")
+		p.handleHello(stream, rw, &commands)
+		return
+	}
+
+	if str == "ping" {
+		fmt.Println("[", peer, "] says ping")
+		return
+	}
+
+	if str == "\n" {
+		fmt.Println("[", peer, "] sent an empty string")
+		return
+	}
+
+	// Green console colour: 	\x1b[32m
+	// Reset console colour: 	\x1b[0m
+	fmt.Println("[", peer, "] sent an unknown message:", str)
+}
+
+func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command *[]string){
+	// TODO: is there anything to say in the hello message
+	peer := stream.Conn().RemotePeer()
+
+	// TODO: split this
+	// fmt.Println(stream.Conn().RemoteMultiaddr()) = /ip4/192.168.0.232/tcp/6667
+
+	peerid := peer.Pretty()
+	// peermultiaddr := stream.Conn().RemoteMultiaddr()
+
+	// if peer in db
+	a := p.rdb.HGet(p.rdhash, peerid)
+	fmt.Println("data in db:", a)
+	// lower his score, he is spamming
+
+	// otherwise
+	if len(*command) != 2 {
+		// this should be here, lower his score
+		fmt.Println("no Version")
+		return
+	}
+
+	// TODO: validate Version?
+	version := (*command)[1]
+
+	var reputation Reputation
+	reputation.Peerid = peerid
+	// TODO: fix this
+	//  reputation.multiaddr = string(peermultiaddr)
+	reputation.Version = version
+
+	data := reputation.rep2json()
+	fmt.Println("data", data)
+
+	p.rdb.HSet(p.rdhash, peerid, data)
+
+
+	a = p.rdb.HGet(p.rdhash, peerid)
+	fmt.Println("data in db:", a)
+
+	rw.WriteString("helloreply version3\n")
 }
