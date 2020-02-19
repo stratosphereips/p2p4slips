@@ -29,19 +29,17 @@ type Peer struct {
 	dbAddress string
 	rendezVous string
 	ctx context.Context
-	canTalk bool
 }
 
 // dbInit function for a peer. It creates the database connection, starts listening for channels. It also initializes
 // everything needed for libp2p and sets up a Host that listens for new connections.
 // TODO: call this from somewhere?
-func peerInit(canTalk bool, port int) *Peer {
+func peerInit(port int) *Peer {
 	var p Peer
 	p.port = port
 	p.hostname = "0.0.0.0"
 	p.protocol = "/chat/1.1.0"
 	p.dbAddress = "localhost:6379"
-	p.canTalk = canTalk
 
 	// connect to the database
 	// TODO: not crashing when database is offline would be nice
@@ -59,15 +57,11 @@ func peerInit(canTalk bool, port int) *Peer {
 	// subscribe to SLIPS channel
 	go p.redisSubscribe()
 
-
-	fmt.Println("setting handler")
 	// link to a listener for new connections
 	// TODO: this can't be tested that easily on localhost, as they will connect to the same db. Perhaps more redises?
 	// TODO: this needs access to the db object. It can be global or passed in a function:
 	// TODO:     https://stackoverflow.com/questions/26211954/how-do-i-pass-arguments-to-my-handler
 	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
-
-	fmt.Println("foo")
 
 	// run peer discovery in the background
 	go p.discoverPeers()
@@ -193,8 +187,8 @@ func (p *Peer) talker(rw *bufio.ReadWriter) {
 }
 
 func (p *Peer) listener(stream network.Stream) {
-	peer := stream.Conn().RemotePeer()
-	fmt.Println("[", peer, "] A peer is contacting me")
+	remotePeer := stream.Conn().RemotePeer()
+	// fmt.Println("[", remotePeer, "] Incoming stream")
 
 	// Create a buffer stream for non blocking read and write.
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
@@ -213,24 +207,24 @@ func (p *Peer) listener(stream network.Stream) {
 	commands := strings.Fields(str)
 
 	if commands[0] == "hello" {
-		fmt.Println("[", peer, "] says hello")
+		fmt.Println("[", remotePeer, "] New peer says hello to me")
 		p.handleHello(stream, rw, &commands)
 		return
 	}
 
 	if str == "ping" {
-		fmt.Println("[", peer, "] says ping")
+		fmt.Println("[", remotePeer, "] says ping")
 		return
 	}
 
 	if str == "\n" {
-		fmt.Println("[", peer, "] sent an empty string")
+		fmt.Println("[", remotePeer, "] sent an empty string")
 		return
 	}
 
 	// Green console colour: 	\x1b[32m
 	// Reset console colour: 	\x1b[0m
-	fmt.Println("[", peer, "] sent an unknown message:", str)
+	fmt.Println("[", remotePeer, "] sent an unknown message:", str)
 }
 
 func (p *Peer) sayHello(peerAddress peer.AddrInfo){
@@ -246,6 +240,8 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 
 	if err := p.host.Connect(p.ctx, peerAddress); err != nil {
 		fmt.Println("Connection failed:", err)
+		// TODO: lower rep?
+		return
 	}
 
 	// open a stream, this stream will be handled by handleStream other end
@@ -253,41 +249,44 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 
 	if err != nil {
 		fmt.Println("Stream open failed", err)
+		// TODO: lower rep?
+		return
 	}
 
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 
 	fmt.Println("Saying hello")
-	_, err = rw.WriteString("hello version1\n")
-	if err != nil {
-		fmt.Println("Error writing to buffer")
-		// TODO: do something here?
-		// panic(err)
-		return
-	}
-
-	err = rw.Flush()
-	if err != nil {
-		fmt.Println("Error flushing buffer")
-		// TODO: do something here?
-		// panic(err)
+	if !send2rw(rw, "hello version1\n") {
+		fmt.Println("error sending")
+		// TODO: lower rep?
 		return
 	}
 
 	input := make(chan string)
-	fmt.Println("running rw channel")
 	go rw2channel(input, rw)
 
 	response := ""
-
 	select{
 	case response = <- input:
-		fmt.Println("input received")
 		break
 	case <-time.After(5 * time.Second):
 		fmt.Println("timeout")
 	}
 	fmt.Println("text:", response)
+
+	command := strings.Fields(response)
+	var remoteVersion string
+
+	if len(command) != 2 || command[0] != "hello" {
+		// TODO: malformed hello message, lower rep?
+		return
+	} else {
+		remoteVersion = command[1]
+	}
+
+	fmt.Println("Peer response ok, updating reputation")
+	reputation.Version = remoteVersion
+	p.setReputation(reputation)
 
 	// is this a proper close?
 	err = stream.Close()
@@ -310,23 +309,39 @@ func rw2channel(input chan string, rw *bufio.ReadWriter) {
 	}
 }
 
+func send2rw (rw *bufio.ReadWriter, message string) bool {
+	_, err := rw.WriteString(message)
+
+	if err != nil {
+		return false
+	}
+	err = rw.Flush()
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
 func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command *[]string){
 	remotePeer := stream.Conn().RemotePeer()
-	peerid := remotePeer.Pretty()
+	peerId := remotePeer.Pretty()
 	remoteAddr := stream.Conn().RemoteMultiaddr().String()
 
 	// parse contents of hello message
 	var remoteVersion string
 	if len(*command) != 2 {
-		// TODO: malformed hello message, lower his score
+		fmt.Println("Invalid Hello format")
+		// TODO: malformed hello message, lower rep?
+		return
 	} else {
 		remoteVersion = (*command)[1]
 	}
 
-	if !p.isKnown(peerid) {
+	if !p.isKnown(peerId) {
 		// add a simple record into db
 		reputation := Reputation{
-			Peerid:       peerid,
+			Peerid:       peerId,
 			Multiaddr:    remoteAddr,
 			Version:      remoteVersion,
 			Interactions: nil,
@@ -335,7 +350,7 @@ func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command 
 		p.setReputation(reputation)
 
 		// say hello
-		fmt.Println("replying to hello")
+		fmt.Println("Sending hello reply...")
 
 		_, err := rw.WriteString("hello version1\n")
 		if err != nil {
@@ -350,12 +365,11 @@ func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command 
 			fmt.Println("Error flushing buffer")
 			// panic(err)
 		}
-		fmt.Println("apparently it went ok")
 		return
 	}
 
 	// if he is not known, check if his information is new
-	reputation := p.getReputation(peerid)
+	reputation := p.getReputation(peerId)
 
 	if reputation.Version != remoteVersion {
 		// update this info

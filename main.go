@@ -44,16 +44,9 @@ func main() {
 
 	host := cfg.listenHost
 	port := cfg.listenPort
-	cantalk := cfg.canTalk
 
 	fmt.Println("host is", host, "and port is", port)
 
-	if cantalk {
-		fmt.Println("I can talk")
-	} else {
-		fmt.Println("I can't talk")
-	}
-
-	go peerInit(cantalk, port)
+	go peerInit(port)
 	select {}
 }
