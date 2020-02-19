@@ -54,8 +54,6 @@ func main() {
 		fmt.Println("I can't talk")
 	}
 
-	peerInit(cantalk, port)
-	select {
-
-	}
+	go peerInit(cantalk, port)
+	select {}
 }

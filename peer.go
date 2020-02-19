@@ -156,7 +156,7 @@ func (p *Peer) isKnown(peerid string) bool {
 
 func (p *Peer) setReputation(reputation Reputation) {
 	data := reputation.rep2json()
-	fmt.Println("data", data)
+	// fmt.Println("data", data)
 	p.rdb.HSet(p.rdhash, reputation.Peerid, data)
 }
 
@@ -261,12 +261,52 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	_, err = rw.WriteString("hello version1\n")
 	if err != nil {
 		fmt.Println("Error writing to buffer")
-		panic(err)
+		// TODO: do something here?
+		// panic(err)
+		return
 	}
+
 	err = rw.Flush()
 	if err != nil {
 		fmt.Println("Error flushing buffer")
-		panic(err)
+		// TODO: do something here?
+		// panic(err)
+		return
+	}
+
+	input := make(chan string)
+	fmt.Println("running rw channel")
+	go rw2channel(input, rw)
+
+	response := ""
+
+	select{
+	case response = <- input:
+		fmt.Println("input received")
+		break
+	case <-time.After(5 * time.Second):
+		fmt.Println("timeout")
+	}
+	fmt.Println("text:", response)
+
+	// is this a proper close?
+	err = stream.Close()
+	if err != nil {
+		fmt.Println("Error closing")
+		// TODO: do something here?
+		// panic(err)
+		return
+	}
+}
+
+func rw2channel(input chan string, rw *bufio.ReadWriter) {
+	for {
+		result, err := rw.ReadString('\n')
+		if err != nil {
+			fmt.Println("err on rw2channel")
+		}
+
+		input <- result
 	}
 }
 
@@ -295,7 +335,22 @@ func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command 
 		p.setReputation(reputation)
 
 		// say hello
-		rw.WriteString("hello version1\n")
+		fmt.Println("replying to hello")
+
+		_, err := rw.WriteString("hello version1\n")
+		if err != nil {
+			// TODO: don't panic
+			fmt.Println("Error writing to buffer")
+			// panic(err)
+		}
+
+		err = rw.Flush()
+		if err != nil {
+			// TODO: don't panic
+			fmt.Println("Error flushing buffer")
+			// panic(err)
+		}
+		fmt.Println("apparently it went ok")
 		return
 	}
 
