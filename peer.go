@@ -20,8 +20,9 @@ import (
 )
 
 type Peer struct {
-	rdb *redis.Client
-	rdhash string
+	rdb  *redis.Client
+	activePeers string
+	allPeers string
 	host host.Host
 	port int
 	hostname string
@@ -40,22 +41,24 @@ func peerInit(port int) *Peer {
 	p.hostname = "0.0.0.0"
 	p.protocol = "/chat/1.1.0"
 	p.dbAddress = "localhost:6379"
+	p.rendezVous = "meetme"
 
 	// connect to the database
 	// TODO: not crashing when database is offline would be nice
+	//  also when database shuts down while this is still running...
 	p.rdb = redis.NewClient(&redis.Options{
 		Addr:     p.dbAddress,
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
 
+	p.rdb.FlushAll()
+
 	// prepare p2p host
 	p.p2pInit()
 
-	p.rdhash = p.host.ID().Pretty()
-
-	// subscribe to SLIPS channel
-	go p.redisSubscribe()
+	p.activePeers = p.host.ID().Pretty() + "-active"
+	p.allPeers = p.host.ID().Pretty() + "-all"
 
 	// link to a listener for new connections
 	// TODO: this can't be tested that easily on localhost, as they will connect to the same db. Perhaps more redises?
@@ -65,33 +68,10 @@ func peerInit(port int) *Peer {
 
 	// run peer discovery in the background
 	go p.discoverPeers()
+
+	// also run a service to continuously check for active peers.
+
 	return &p
-}
-
-// subscribe to a channel and print all messages that arrive
-// taken from https://godoc.org/github.com/go-redis/redis#example-PubSub-Receive
-func (p *Peer) redisSubscribe() {
-	pubsub := p.rdb.Subscribe("new_ip")
-
-	// Wait for confirmation that subscription is created before publishing anything.
-	_, err := pubsub.Receive()
-	if err != nil {
-		panic(err)
-	}
-
-	// Go channel which receives messages.
-	ch := pubsub.Channel()
-
-	// TODO: there was a part here that prevented the sample from working alongside SLIPS. I need to look into that.
-	// time.AfterFunc(time.Second, func() {
-	//    // When pubsub is closed channel is closed too.
-	//    _ = pubsub.Close()
-	//})
-
-	// Consume messages.
-	for msg := range ch {
-		fmt.Println(msg.Channel, msg.Payload)
-	}
 }
 
 func (p *Peer) p2pInit() {
@@ -125,6 +105,8 @@ func (p *Peer) p2pInit() {
 func (p *Peer) discoverPeers() {
 	fmt.Println("Looking for peers")
 
+	// TODO: handle panic: No multicast listeners could be started
+	//  happens when network is disabled
 	peerChan := initMDNS(p.ctx, p.host, p.rendezVous)
 
 	for {
@@ -132,9 +114,12 @@ func (p *Peer) discoverPeers() {
 		peerid := peerAddress.ID.Pretty()
 		fmt.Println(">>> Found peerAddress:", peerid)
 
-		if p.isKnown(peerid) {
-			fmt.Println("I know him already, skipping")
+		if p.isActivePeer(peerid) {
+			fmt.Println("I know him and he is active, skipping")
 			continue
+		} else if p.isKnown(peerid) {
+			fmt.Println("I know him, but we've met a long time ago, skipping")
+			p.setPeerOnline(peerid)
 		} else {
 			fmt.Println("This is a new node, contacting him...")
 		}
@@ -144,21 +129,40 @@ func (p *Peer) discoverPeers() {
 	}
 }
 
-func (p *Peer) isKnown(peerid string) bool {
-	return p.rdb.HExists(p.rdhash, peerid).Val()
+func (p *Peer) isActivePeer(peerid string) bool {
+	return p.rdb.HExists(p.activePeers, peerid).Val()
 }
 
-func (p *Peer) setReputation(reputation Reputation) {
+func (p *Peer) isKnown(peerid string) bool {
+	return p.rdb.HExists(p.allPeers, peerid).Val()
+}
+
+func (p *Peer) setReputation(reputation *Reputation) {
+	if reputation.Ip == "" {
+		fmt.Println("no data")
+	}
 	data := reputation.rep2json()
 	// fmt.Println("data", data)
-	p.rdb.HSet(p.rdhash, reputation.Peerid, data)
+	p.rdb.HSet(p.activePeers, reputation.Peerid, data)
 }
 
 func (p *Peer) getReputation(peerid string) Reputation {
-	data := p.rdb.HGet(p.rdhash, peerid).Val()
+	data := p.rdb.HGet(p.activePeers, peerid).Val()
 	reputation := Reputation{}
 	_ = json.Unmarshal([]byte(data), &reputation)
 	return reputation
+}
+
+func (p *Peer) setPeerOffline(peerid string) {
+	// check if he is in all
+	// if not, copy him from active
+	// update info in all
+	// delete from active
+}
+
+func (p *Peer) setPeerOnline(peerid string) {
+	// get data from all
+	// copy data to active
 }
 
 func (p *Peer) talker(rw *bufio.ReadWriter) {
@@ -209,11 +213,13 @@ func (p *Peer) listener(stream network.Stream) {
 	if commands[0] == "hello" {
 		fmt.Println("[", remotePeer, "] New peer says hello to me")
 		p.handleHello(stream, rw, &commands)
+		p.GetActivePeers()
 		return
 	}
 
 	if str == "ping" {
 		fmt.Println("[", remotePeer, "] says ping")
+		p.handlePing(stream, rw, &commands)
 		return
 	}
 
@@ -229,13 +235,7 @@ func (p *Peer) listener(stream network.Stream) {
 
 func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	// add a simple record into db
-	reputation := Reputation{
-		Peerid:       peerAddress.ID.Pretty(),
-		Multiaddr:    peerAddress.String(),
-		Version:      "",
-		Interactions: nil,
-		Uptime:       nil,
-	}
+	reputation := PeerAddress2rep(peerAddress)
 	p.setReputation(reputation)
 
 	if err := p.host.Connect(p.ctx, peerAddress); err != nil {
@@ -284,7 +284,7 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 		remoteVersion = command[1]
 	}
 
-	fmt.Println("Peer response ok, updating reputation")
+	fmt.Println("PeerOld response ok, updating reputation")
 	reputation.Version = remoteVersion
 	p.setReputation(reputation)
 
@@ -296,31 +296,6 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 		// panic(err)
 		return
 	}
-}
-
-func rw2channel(input chan string, rw *bufio.ReadWriter) {
-	for {
-		result, err := rw.ReadString('\n')
-		if err != nil {
-			fmt.Println("err on rw2channel")
-		}
-
-		input <- result
-	}
-}
-
-func send2rw (rw *bufio.ReadWriter, message string) bool {
-	_, err := rw.WriteString(message)
-
-	if err != nil {
-		return false
-	}
-	err = rw.Flush()
-	if err != nil {
-		return false
-	}
-
-	return true
 }
 
 func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command *[]string){
@@ -338,15 +313,9 @@ func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command 
 		remoteVersion = (*command)[1]
 	}
 
-	if !p.isKnown(peerId) {
+	if !p.isActivePeer(peerId) {
 		// add a simple record into db
-		reputation := Reputation{
-			Peerid:       peerId,
-			Multiaddr:    remoteAddr,
-			Version:      remoteVersion,
-			Interactions: nil,
-			Uptime:       nil,
-		}
+		reputation := Stream2rep(stream)
 		p.setReputation(reputation)
 
 		// say hello
@@ -384,4 +353,122 @@ func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command 
 	if reputation.Multiaddr == remoteAddr && reputation.Version == remoteVersion {
 		// lower his rep
 	}
+}
+
+func (p *Peer) sendPing() {
+	// check last ping time, if it was recently, do not ping at all
+
+	// open stream
+	// open rw
+	// send ping to rw (flush!)
+	// wait for reply
+
+	// if successful: add a new good interaction, update reputation
+	// if unsuccessful: add a new bad interaction. If there are three of them, set peer offline
+}
+
+func (p *Peer) handlePing(stream network.Stream, rw *bufio.ReadWriter, command *[]string) {
+	// do i have reputation for him in all?
+	// if not: lower reputation. Send hello.
+
+	// if last contact was recently, lower score, this is not necessary
+
+	// reply to ping
+	// increment last contact in reputation
+	// also increment this in all contacts (hello etc)
+}
+
+func (p *Peer) GetActivePeers() *map[string]*Reputation {
+	data := p.rdb.HGetAll(p.activePeers)
+	reputations := make(map[string]*Reputation)
+
+	for peerId, jsonData := range data.Val() {
+		fmt.Println(peerId, ":::::", jsonData)
+		reputations[peerId] = Json2rep(jsonData)
+	}
+
+	return &reputations
+}
+
+
+func (p *Peer) GetAllPeers() *[]*Reputation {
+	peers := make([]*Reputation, 0)
+
+	data := p.rdb.HGetAll(p.allPeers)
+	fmt.Println("All neighbors:")
+	fmt.Println(data)
+
+	// TODO: this is obviously not oK
+	return &peers
+}
+
+func (p *Peer) IsActivePeerIP(ipAddress string) *Reputation {
+	peers := p.GetActivePeers()
+
+	for _, rep := range *peers {
+		if (*rep).Ip == ipAddress {
+			return rep
+		}
+	}
+	return nil
+}
+
+func (p *Peer) IsPeerIP(ipAddress string) *Reputation {
+	// TODO change to all peers later
+	peers := p.GetActivePeers()
+
+	for _, p := range *peers {
+		if p.Ip == ipAddress {
+			return p
+		}
+	}
+	return nil
+}
+
+func rw2channel(input chan string, rw *bufio.ReadWriter) {
+	for {
+		result, err := rw.ReadString('\n')
+		if err != nil {
+			fmt.Println("err on rw2channel")
+		}
+
+		input <- result
+	}
+}
+
+func send2rw (rw *bufio.ReadWriter, message string) bool {
+	_, err := rw.WriteString(message)
+
+	if err != nil {
+		return false
+	}
+	err = rw.Flush()
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
+// public functions follow
+
+func (p *Peer) Blame (ipAddress string) {
+	b := p.IsPeerIP(ipAddress)
+
+	if b == nil {
+		fmt.Printf("[PEER ] Can't blame '%s' - not a peer", ipAddress)
+		return
+	}
+
+	// TODO: implement
+	fmt.Printf("[PEER ] Can't blame '%s' - not implemented yet", ipAddress)
+	return
+}
+
+func (p *Peer) Send (data string) {
+	// for now, use the entire active list
+	// TODO: choose 50 peers
+	// TODO: consider broadcasting
+	peerList := p.GetActivePeers()
+	fmt.Println(peerList)
 }
