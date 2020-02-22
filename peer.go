@@ -383,7 +383,6 @@ func (p *Peer) GetActivePeers() *map[string]*Reputation {
 	reputations := make(map[string]*Reputation)
 
 	for peerId, jsonData := range data.Val() {
-		fmt.Println(peerId, ":::::", jsonData)
 		reputations[peerId] = Json2rep(jsonData)
 	}
 
@@ -391,15 +390,16 @@ func (p *Peer) GetActivePeers() *map[string]*Reputation {
 }
 
 
-func (p *Peer) GetAllPeers() *[]*Reputation {
-	peers := make([]*Reputation, 0)
+func (p *Peer) GetAllPeers() *map[string]*Reputation {
 
 	data := p.rdb.HGetAll(p.allPeers)
-	fmt.Println("All neighbors:")
-	fmt.Println(data)
+	reputations := make(map[string]*Reputation)
 
-	// TODO: this is obviously not oK
-	return &peers
+	for peerId, jsonData := range data.Val() {
+		reputations[peerId] = Json2rep(jsonData)
+	}
+
+	return &reputations
 }
 
 func (p *Peer) IsActivePeerIP(ipAddress string) *Reputation {
@@ -414,8 +414,7 @@ func (p *Peer) IsActivePeerIP(ipAddress string) *Reputation {
 }
 
 func (p *Peer) IsPeerIP(ipAddress string) *Reputation {
-	// TODO change to all peers later
-	peers := p.GetActivePeers()
+	peers := p.GetAllPeers()
 
 	for _, p := range *peers {
 		if p.Ip == ipAddress {
@@ -466,6 +465,14 @@ func (p *Peer) Blame (ipAddress string) {
 }
 
 func (p *Peer) Send (data string) {
+	// for now, use the entire active list
+	// TODO: choose 50 peers
+	// TODO: consider broadcasting
+	peerList := p.GetActivePeers()
+	fmt.Println(peerList)
+}
+
+func (p *Peer) SendAndWait (data string, timeout int) {
 	// for now, use the entire active list
 	// TODO: choose 50 peers
 	// TODO: consider broadcasting
