@@ -190,7 +190,34 @@ func (p *Peer) talker(rw *bufio.ReadWriter) {
 	}
 }
 
+func (p *Peer) checkPeerStore() {
+	store := p.host.Peerstore()
+	fmt.Println("peerstore", store.Peers())
+
+
+	for i, peerid := range store.Peers() {
+		fmt.Println(i, peerid)
+	}
+
+	peerid := store.Peers()[0]
+
+	fmt.Println(store.PeerInfo(store.Peers()[0]))
+	err := store.Put(peerid, "rep", Reputation{Ip: "1.2.3.4", Multiaddr:"multiaddr"})
+	fmt.Println("put err:", err)
+
+	iff, err := store.Get(peerid, "rep")
+
+	fmt.Println("rep from store:", iff, err)
+
+	fmt.Println("Examining peer", peerid)
+	fmt.Println(store.GetProtocols(peerid))
+	fmt.Println(store.LatencyEWMA(peerid))
+	fmt.Println(store.PeerInfo(peerid))
+}
+
 func (p *Peer) listener(stream network.Stream) {
+	p.checkPeerStore()
+
 	remotePeer := stream.Conn().RemotePeer()
 	// fmt.Println("[", remotePeer, "] Incoming stream")
 
@@ -475,7 +502,8 @@ func (p *Peer) Send (data string) {
 func (p *Peer) SendAndWait (data string, timeout int) {
 	// for now, use the entire active list
 	// TODO: choose 50 peers
-	// TODO: consider broadcasting
-	peerList := p.GetActivePeers()
-	fmt.Println(peerList)
+	//// TODO: consider broadcasting
+	//peerList := p.GetActivePeers()
+	//
+	//peerstore.AddrBook()
 }

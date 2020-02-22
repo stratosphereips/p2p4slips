@@ -52,7 +52,7 @@ func Stream2rep(stream network.Stream) *Reputation {
 	multiAddress := stream.Conn().RemoteMultiaddr().String()
 	multiAddressParsed := strings.Split(multiAddress, "/")
 	r := Reputation{
-		Peerid:       multiAddressParsed[5],
+		Peerid:       stream.Conn().RemotePeer().Pretty(),
 		Multiaddr:    multiAddress,
 		Ip:		      multiAddressParsed[1],
 		Version:      "",
