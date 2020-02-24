@@ -42,12 +42,21 @@ func main() {
 		os.Exit(0)
 	}
 
+	name, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("hostname:", name)
+
 	host := cfg.listenHost
 	port := cfg.listenPort
+	keyFile := cfg.keyFile
+	keyReset := cfg.resetKeys
 
 	fmt.Println("host is", host, "and port is", port)
 
-	peer := peerInit(port)
+	peer := peerInit(port, keyFile, keyReset)
 
 	slist := SListener{channelName:"gotest", dbAddress:"localhost:6379", peer:peer}
 	slist.dbInit()

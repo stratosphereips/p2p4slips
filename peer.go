@@ -3,12 +3,10 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v7"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -35,7 +33,7 @@ type Peer struct {
 // dbInit function for a peer. It creates the database connection, starts listening for channels. It also initializes
 // everything needed for libp2p and sets up a Host that listens for new connections.
 // TODO: call this from somewhere?
-func peerInit(port int) *Peer {
+func peerInit(port int, keyFile string, keyReset bool) *Peer {
 	var p Peer
 	p.port = port
 	p.hostname = "0.0.0.0"
@@ -55,7 +53,7 @@ func peerInit(port int) *Peer {
 	p.rdb.FlushAll()
 
 	// prepare p2p host
-	p.p2pInit()
+	p.p2pInit(keyFile, keyReset)
 
 	p.activePeers = p.host.ID().Pretty() + "-active"
 	p.allPeers = p.host.ID().Pretty() + "-all"
@@ -74,21 +72,17 @@ func peerInit(port int) *Peer {
 	return &p
 }
 
-func (p *Peer) p2pInit() {
+func (p *Peer) p2pInit(keyFile string, keyReset bool) {
 	p.ctx = context.Background()
-	r := rand.Reader
 
-	// Creates a new RSA key pair for this host.
-	prvKey, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
-	if err != nil {
-		panic(err)
-	}
+	prvKey := p.loadKey(keyFile, keyReset)
 
 	// 0.0.0.0 will listen on any interface device.
 	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", p.hostname, p.port))
 
 	// libp2p.New constructs a new libp2p Host.
 	// Other options can be added here.
+	var err error
 	p.host, err = libp2p.New(
 		p.ctx,
 		libp2p.ListenAddrs(sourceMultiAddr),
