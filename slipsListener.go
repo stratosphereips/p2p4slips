@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v7"
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -77,9 +78,25 @@ func (s *SListener) blame (data string){
 }
 
 func (s *SListener) broadcast (data string){
-
+	s.peer.Send(data)
 }
 
-func (s *SListener) ask (data string){
+func (s *SListener) ask (message string){
+	parsedMessage := strings.SplitN(message, " ", 2)
 
+	if len(parsedMessage) != 2 {
+		fmt.Printf("[SLIST] Can't ask about data - message must be in the correct format 'ASK timeout data'")
+		return
+	}
+
+	timeout, err := strconv.Atoi(parsedMessage[0])
+	if err != nil {
+		fmt.Printf("[SLIST] Can't ask about data - '%s' is not a valid timeout in seconds", parsedMessage[0])
+		return
+	}
+	data := parsedMessage[1]
+
+	response := s.peer.SendAndWait(data, timeout)
+	fmt.Println(response)
+	// TODO: save response to db
 }

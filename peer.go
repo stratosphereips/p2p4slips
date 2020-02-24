@@ -499,11 +499,12 @@ func (p *Peer) Send (data string) {
 	fmt.Println(peerList)
 }
 
-func (p *Peer) SendAndWait (data string, timeout int) {
+func (p *Peer) SendAndWait (data string, timeout int) string {
 	// for now, use the entire active list
 	// TODO: choose 50 peers
 	//// TODO: consider broadcasting
 	//peerList := p.GetActivePeers()
 	//
 	//peerstore.AddrBook()
+	return ""
 }
