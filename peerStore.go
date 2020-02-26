@@ -67,10 +67,27 @@ func (ps *PeerStore) Experiment() {
 //	return nil
 //}
 
-func (ps *PeerStore) saveToFile (filename string) {
-	// save all data from peerstore to file, encrypted by private key
-	// permissions 0444 (readonly)
-}
+//func (ps *PeerStore) saveToFile (filename string, key PubKey) error {
+//	// save all data from peerstore to file, encrypted by private key
+//	peerData := ps.store.Peers()
+//
+//	marshaledPeerData, err := json.Marshal(peerData)
+//
+//	// TODO: catch err
+//
+//	r := rand.Reader
+//	encryptedData, err := rsa.EncryptPKCS1v15(r, &key, marshaledPeerData)
+//
+//	// TODO: catch err
+//
+//	err = ioutil.WriteFile(filename, encryptedData, 0444)
+//	if err != nil {
+//		fmt.Println("[PEERSTORE] PeerStore saving failed:", err)
+//		return err
+//	}
+//
+//	return nil
+//}
 
 func (ps *PeerStore) readFromFile (filename string, privateKey crypto.PrivKey) {
 	// read from file

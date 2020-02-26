@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v7"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 func redisDemo(){
@@ -64,6 +66,15 @@ func main() {
 	}
 
 	slist := SListener{channelName:"gotest", dbAddress:"localhost:6379", peer:peer}
-	slist.dbInit()
-	select {}
+	go slist.dbInit()
+
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+	<-ch
+	fmt.Println("Received signal, shutting down...")
+
+	// shut the node down
+	if err := peer.host.Close(); err != nil {
+		panic(err)
+	}
 }
