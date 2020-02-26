@@ -3,10 +3,10 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v7"
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -29,6 +29,7 @@ type Peer struct {
 	rendezVous string
 	ctx context.Context
 	peerstore PeerStore
+	privKey crypto.PrivKey
 }
 
 // dbInit function for a peer. It creates the database connection, starts listening for channels. It also initializes
@@ -59,7 +60,8 @@ func peerInit(port int, keyFile string, keyReset bool) (*Peer, error) {
 	// TODO:     https://stackoverflow.com/questions/26211954/how-do-i-pass-arguments-to-my-handler
 	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
 
-	p.peerstore = PeerStore{store:p.host.Peerstore()}
+	p.peerstore = PeerStore{store:p.host.Peerstore(), saveFile:fmt.Sprintf("/home/dita/ownCloud/peerstore%d", port)}
+	p.peerstore.readFromFile(p.privKey)
 
 	// run peer discovery in the background
 	err = p.discoverPeers()
@@ -99,6 +101,8 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 	p.ctx = context.Background()
 
 	prvKey := p.loadKey(keyFile, keyReset)
+
+	p.privKey = prvKey
 
 	// 0.0.0.0 will listen on any interface device.
 	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", p.hostname, p.port))
@@ -156,22 +160,6 @@ func (p *Peer) isActivePeer(peerid string) bool {
 
 func (p *Peer) isKnown(peerid string) bool {
 	return p.rdb.HExists(p.allPeers, peerid).Val()
-}
-
-func (p *Peer) setReputation(reputation *Reputation) {
-	if reputation.Ip == "" {
-		fmt.Println("no data")
-	}
-	data := reputation.rep2json()
-	// fmt.Println("data", data)
-	p.rdb.HSet(p.activePeers, reputation.Peerid, data)
-}
-
-func (p *Peer) getReputation(peerid string) Reputation {
-	data := p.rdb.HGet(p.activePeers, peerid).Val()
-	reputation := Reputation{}
-	_ = json.Unmarshal([]byte(data), &reputation)
-	return reputation
 }
 
 func (p *Peer) setPeerOffline(peerid string) {
@@ -254,25 +242,28 @@ func (p *Peer) listener(stream network.Stream) {
 	// Green console colour: 	\x1b[32m
 	// Reset console colour: 	\x1b[0m
 	fmt.Println("[", remotePeer, "] sent an unknown message:", str)
+	p.peerstore.decreaseGoodCount(remotePeer)
 }
 
 func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	// add a simple record into db
 	reputation := PeerAddress2rep(peerAddress)
-	p.setReputation(reputation)
+	remotePeer := peerAddress.ID
+	remoteIP := strings.Split(peerAddress.String(), "/")[2]
+	p.peerstore.updatePeerIP(remotePeer, remoteIP)
 
 	if err := p.host.Connect(p.ctx, peerAddress); err != nil {
 		fmt.Println("Connection failed:", err)
-		// TODO: lower rep?
+		p.peerstore.decreaseGoodCount(remotePeer)
 		return
 	}
 
 	// open a stream, this stream will be handled by handleStream other end
-	stream, err := p.host.NewStream(p.ctx, peerAddress.ID, protocol.ID(p.protocol))
+	stream, err := p.host.NewStream(p.ctx, remotePeer, protocol.ID(p.protocol))
 
 	if err != nil {
 		fmt.Println("Stream open failed", err)
-		// TODO: lower rep?
+		p.peerstore.decreaseGoodCount(remotePeer)
 		return
 	}
 
@@ -281,7 +272,7 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	fmt.Println("Saying hello")
 	if !send2rw(rw, "hello version1\n") {
 		fmt.Println("error sending")
-		// TODO: lower rep?
+		p.peerstore.decreaseGoodCount(remotePeer)
 		return
 	}
 
@@ -301,7 +292,7 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	var remoteVersion string
 
 	if len(command) != 2 || command[0] != "hello" {
-		// TODO: malformed hello message, lower rep?
+		p.peerstore.decreaseGoodCount(remotePeer)
 		return
 	} else {
 		remoteVersion = command[1]
@@ -309,14 +300,14 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 
 	fmt.Println("PeerOld response ok, updating reputation")
 	reputation.Version = remoteVersion
-	p.setReputation(reputation)
+	p.peerstore.increaseGoodCount(remotePeer)
+	p.peerstore.updatePeerVersion(remotePeer, remoteVersion)
 
 	// is this a proper close?
 	err = stream.Close()
 	if err != nil {
 		fmt.Println("Error closing")
 		// TODO: do something here?
-		// panic(err)
 		return
 	}
 }
@@ -324,7 +315,7 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command *[]string){
 	remotePeer := stream.Conn().RemotePeer()
 	peerId := remotePeer.Pretty()
-	remoteAddr := stream.Conn().RemoteMultiaddr().String()
+	remoteIP := strings.Split(stream.Conn().RemoteMultiaddr().String(), "/")[2]
 
 	// parse contents of hello message
 	var remoteVersion string
@@ -338,8 +329,7 @@ func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command 
 
 	if !p.isActivePeer(peerId) {
 		// add a simple record into db
-		reputation := Stream2rep(stream)
-		p.setReputation(reputation)
+		p.peerstore.updatePeerIP(remotePeer, remoteIP)
 
 		// say hello
 		fmt.Println("Sending hello reply...")
@@ -361,20 +351,23 @@ func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command 
 	}
 
 	// if he is not known, check if his information is new
-	reputation := p.getReputation(peerId)
+	remotePeerData := p.peerstore.getPeerData(remotePeer)
 
-	if reputation.Version != remoteVersion {
+	if remotePeerData.Version != remoteVersion {
 		// update this info
 		fmt.Println("updating version info")
+		p.peerstore.updatePeerVersion(remotePeer, remoteVersion)
 	}
 
-	if reputation.Multiaddr != remoteAddr {
+	if remotePeerData.LastUsedIP != remoteIP {
 		// update this info
 		fmt.Println("updating address info")
+		p.peerstore.updatePeerIP(remotePeer, remoteIP)
 	}
 
-	if reputation.Multiaddr == remoteAddr && reputation.Version == remoteVersion {
+	if remotePeerData.LastUsedIP == remoteIP && remotePeerData.Version == remoteVersion {
 		// lower his rep
+		p.peerstore.decreaseGoodCount(remotePeer)
 	}
 }
 
@@ -503,4 +496,13 @@ func (p *Peer) SendAndWait (data string, timeout int) string {
 	//
 	//peerstore.AddrBook()
 	return ""
+}
+
+func (p *Peer) close(){
+	p.peerstore.saveToFile(p.privKey)
+
+	// shut the node down
+	if err := p.host.Close(); err != nil {
+		panic(err)
+	}
 }

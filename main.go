@@ -73,8 +73,5 @@ func main() {
 	<-ch
 	fmt.Println("Received signal, shutting down...")
 
-	// shut the node down
-	if err := peer.host.Close(); err != nil {
-		panic(err)
-	}
+	peer.close()
 }
