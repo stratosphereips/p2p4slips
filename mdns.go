@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -19,11 +20,12 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 }
 
 //Initialize the MDNS service
-func initMDNS(ctx context.Context, peerhost host.Host, rendezvous string) chan peer.AddrInfo {
+func initMDNS(ctx context.Context, peerhost host.Host, rendezvous string) (chan peer.AddrInfo, error) {
 	// An hour might be a long long period in practical applications. But this is fine for us
 	ser, err := discovery.NewMdnsService(ctx, peerhost, time.Hour, rendezvous)
 	if err != nil {
-		panic(err)
+		fmt.Printf("[ERROR] Couldn't start host discovery - %s\n", err)
+		return nil, err
 	}
 
 	//register with service so that we get notified about peer discovery
@@ -31,5 +33,5 @@ func initMDNS(ctx context.Context, peerhost host.Host, rendezvous string) chan p
 	n.PeerChan = make(chan peer.AddrInfo)
 
 	ser.RegisterNotifee(n)
-	return n.PeerChan
+	return n.PeerChan, nil
 }

@@ -56,7 +56,12 @@ func main() {
 
 	fmt.Println("host is", host, "and port is", port)
 
-	peer := peerInit(port, keyFile, keyReset)
+	peer, err := peerInit(port, keyFile, keyReset)
+
+	if err != nil {
+		fmt.Println("Initializing peer failed")
+		return
+	}
 
 	slist := SListener{channelName:"gotest", dbAddress:"localhost:6379", peer:peer}
 	slist.dbInit()

@@ -28,12 +28,12 @@ type Peer struct {
 	dbAddress string
 	rendezVous string
 	ctx context.Context
+	peerstore PeerStore
 }
 
 // dbInit function for a peer. It creates the database connection, starts listening for channels. It also initializes
 // everything needed for libp2p and sets up a Host that listens for new connections.
-// TODO: call this from somewhere?
-func peerInit(port int, keyFile string, keyReset bool) *Peer {
+func peerInit(port int, keyFile string, keyReset bool) (*Peer, error) {
 	var p Peer
 	p.port = port
 	p.hostname = "0.0.0.0"
@@ -41,16 +41,11 @@ func peerInit(port int, keyFile string, keyReset bool) *Peer {
 	p.dbAddress = "localhost:6379"
 	p.rendezVous = "meetme"
 
-	// connect to the database
-	// TODO: not crashing when database is offline would be nice
-	//  also when database shuts down while this is still running...
-	p.rdb = redis.NewClient(&redis.Options{
-		Addr:     p.dbAddress,
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
-
-	p.rdb.FlushAll()
+	err := p.redisInit()
+	if err != nil {
+		fmt.Println("[PEER] Database connection failed -", err)
+		return nil, err
+	}
 
 	// prepare p2p host
 	p.p2pInit(keyFile, keyReset)
@@ -64,15 +59,43 @@ func peerInit(port int, keyFile string, keyReset bool) *Peer {
 	// TODO:     https://stackoverflow.com/questions/26211954/how-do-i-pass-arguments-to-my-handler
 	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
 
+	p.peerstore = PeerStore{store:p.host.Peerstore()}
+
 	// run peer discovery in the background
-	go p.discoverPeers()
+	err = p.discoverPeers()
+	if err != nil {
+		return nil, err
+	}
 
-	// also run a service to continuously check for active peers.
+	p.peerstore.Experiment()
 
-	return &p
+	return &p, nil
 }
 
-func (p *Peer) p2pInit(keyFile string, keyReset bool) {
+func (p *Peer) redisInit() error {
+	// connect to the database
+	// TODO: not crashing when database is offline would be nice
+	//  also when database shuts down while this is still running...
+	p.rdb = redis.NewClient(&redis.Options{
+		Addr:     p.dbAddress,
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+
+	// delete db
+	// TODO: remove for production
+	p.rdb.FlushAll()
+
+	pongErr := p.rdb.Ping().Err()
+
+	if pongErr != nil {
+		fmt.Println("[PEER] Database connection failed -", pongErr)
+	}
+
+	return pongErr
+}
+
+func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 	p.ctx = context.Background()
 
 	prvKey := p.loadKey(keyFile, keyReset)
@@ -90,37 +113,41 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) {
 	)
 
 	if err != nil {
-		panic(err)
+		fmt.Println("[PEER] P2P initialization failed -", err)
+		return err
 	}
 
 	fmt.Printf("\n[*] Your Multiaddress Is: /ip4/%s/tcp/%v/p2p/%s\n", p.hostname, p.port, p.host.ID().Pretty())
+	return nil
 }
 
-func (p *Peer) discoverPeers() {
+func (p *Peer) discoverPeers() error {
 	fmt.Println("Looking for peers")
 
-	// TODO: handle panic: No multicast listeners could be started
-	//  happens when network is disabled
-	peerChan := initMDNS(p.ctx, p.host, p.rendezVous)
+	peerChan, err := initMDNS(p.ctx, p.host, p.rendezVous)
 
-	for {
+	if err != nil {
+		return err
+	}
+	go func() {	for {
 		peerAddress := <-peerChan // will block until we discover a peerAddress
-		peerid := peerAddress.ID.Pretty()
-		fmt.Println(">>> Found peerAddress:", peerid)
+		peerId := peerAddress.ID.Pretty()
+		fmt.Println(">>> Found peerAddress:", peerId)
 
-		if p.isActivePeer(peerid) {
+		if p.isActivePeer(peerId) {
 			fmt.Println("I know him and he is active, skipping")
 			continue
-		} else if p.isKnown(peerid) {
+		} else if p.isKnown(peerId) {
 			fmt.Println("I know him, but we've met a long time ago, skipping")
-			p.setPeerOnline(peerid)
+			p.setPeerOnline(peerId)
 		} else {
 			fmt.Println("This is a new node, contacting him...")
 		}
 
 		go p.sayHello(peerAddress)
 		time.Sleep(2 * time.Second)
-	}
+	}}()
+	return nil
 }
 
 func (p *Peer) isActivePeer(peerid string) bool {
@@ -184,33 +211,8 @@ func (p *Peer) talker(rw *bufio.ReadWriter) {
 	}
 }
 
-func (p *Peer) checkPeerStore() {
-	store := p.host.Peerstore()
-	fmt.Println("peerstore", store.Peers())
-
-
-	for i, peerid := range store.Peers() {
-		fmt.Println(i, peerid)
-	}
-
-	peerid := store.Peers()[0]
-
-	fmt.Println(store.PeerInfo(store.Peers()[0]))
-	err := store.Put(peerid, "rep", Reputation{Ip: "1.2.3.4", Multiaddr:"multiaddr"})
-	fmt.Println("put err:", err)
-
-	iff, err := store.Get(peerid, "rep")
-
-	fmt.Println("rep from store:", iff, err)
-
-	fmt.Println("Examining peer", peerid)
-	fmt.Println(store.GetProtocols(peerid))
-	fmt.Println(store.LatencyEWMA(peerid))
-	fmt.Println(store.PeerInfo(peerid))
-}
-
 func (p *Peer) listener(stream network.Stream) {
-	p.checkPeerStore()
+	p.peerstore.Experiment()
 
 	remotePeer := stream.Conn().RemotePeer()
 	// fmt.Println("[", remotePeer, "] Incoming stream")

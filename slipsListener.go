@@ -32,7 +32,8 @@ func (s *SListener) dbInit(){
 	// Wait for confirmation that subscription is created before publishing anything.
 	_, err := pubsub.Receive()
 	if err != nil {
-		panic(err)
+		fmt.Printf("[ERROR] Database connection failed - %s\n", err)
+		return
 	}
 
 	// Go channel which receives messages.
@@ -46,12 +47,14 @@ func (s *SListener) dbInit(){
 
 	// Consume messages.
 	for msg := range ch {
+		// if redis is stopped, golang will show an error: pubsub.go:160: redis: discarding bad PubSub connection: EOF
+		// I don't know where to catch this, but it is not a problem. When redis is restarted, pubsub listens again
 		s.handleCommand(msg.Payload)
 	}
 }
 
 func (s *SListener) handleCommand(message string) {
-	fmt.Println("[SLIST] New message from REDIS:", message)
+	fmt.Println("[SLISTENER] New message from REDIS:", message)
 
 	// split message to two parts, command (first word) and the rest
 	parsedMessage := strings.SplitN(message, " ", 2)
@@ -64,13 +67,13 @@ func (s *SListener) handleCommand(message string) {
 	case "ASK":
 		s.ask(parsedMessage[1])
 	default:
-		fmt.Println("[SLIST] Invalid command:", parsedMessage[0])
+		fmt.Println("[SLISTENER] Invalid command:", parsedMessage[0])
 	}
 }
 
 func (s *SListener) blame (data string){
 	if net.ParseIP(data) == nil {
-		fmt.Printf("[SLIST] Can't blame '%s' - not a valid IP\n", data)
+		fmt.Printf("[SLISTENER] Can't blame '%s' - not a valid IP\n", data)
 		return
 	}
 
@@ -85,13 +88,13 @@ func (s *SListener) ask (message string){
 	parsedMessage := strings.SplitN(message, " ", 2)
 
 	if len(parsedMessage) != 2 {
-		fmt.Printf("[SLIST] Can't ask about data - message must be in the correct format 'ASK timeout data'")
+		fmt.Printf("[SLISTENER] Can't ask about data - message must be in the correct format 'ASK timeout data'")
 		return
 	}
 
 	timeout, err := strconv.Atoi(parsedMessage[0])
 	if err != nil {
-		fmt.Printf("[SLIST] Can't ask about data - '%s' is not a valid timeout in seconds", parsedMessage[0])
+		fmt.Printf("[SLISTENER] Can't ask about data - '%s' is not a valid timeout in seconds", parsedMessage[0])
 		return
 	}
 	data := parsedMessage[1]
