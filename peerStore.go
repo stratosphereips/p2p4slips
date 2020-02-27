@@ -23,6 +23,11 @@ type PeerStore struct {
 }
 
 func (ps *PeerStore) saveToFile (key crypto.PrivKey) error {
+	if ps.saveFile == "" {
+		fmt.Println("[PEERSTORE] No save file provided, data is not saved.")
+		return nil
+	}
+
 	// save all data from peerstore to file, encrypted by private key
 
 	// join two peer maps together, overwriting the old data with newer stats:
@@ -52,6 +57,12 @@ func (ps *PeerStore) saveToFile (key crypto.PrivKey) error {
 func (ps *PeerStore) readFromFile (privateKey crypto.PrivKey) {
 	ps.allPeers = make(map[string]*PeerData)
 	ps.activePeers = make(map[string]*PeerData)
+
+	if ps.saveFile == "" {
+		fmt.Println("[PEERSTORE] Using empty peerstore")
+		return
+	}
+
 	encryptedData, err := ioutil.ReadFile(ps.saveFile)
 
 	if err != nil {

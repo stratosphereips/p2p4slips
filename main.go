@@ -3,43 +3,23 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/go-redis/redis/v7"
 	"os"
 	"os/signal"
 	"syscall"
 )
-
-func redisDemo(){
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
-
-	pubsub := rdb.Subscribe("new_ip")
-
-	// Wait for confirmation that subscription is created before publishing anything.
-	_, err := pubsub.Receive()
-	if err != nil {
-		panic(err)
-	}
-
-	// Go channel which receives messages.
-	ch := pubsub.Channel()
-
-	// Consume messages.
-	for msg := range ch {
-		fmt.Println(msg.Channel, msg.Payload)
-	}
-}
 
 func main() {
 	help := flag.Bool("help", false, "Display Help")
 	cfg := parseFlags()
 
 	if *help {
-		fmt.Printf("Simple example for peer discovery using mDNS. mDNS is great when you have multiple peers in local LAN.")
-		fmt.Printf("Usage: \n   Run './chat-with-mdns'\nor Run './chat-with-mdns -host [host] -port [port] -rendezvous [string] -pid [proto ID]'\n")
+		fmt.Println("This is the P2P component of the Stratosphere Linux IPS.")
+		fmt.Println("Run './p2p-experiments' to start it.")
+		fmt.Println("For testing multiple peers on one machine, use './p2p-experiments -port [port]'")
+
+		fmt.Println()
+		fmt.Println("Usage:")
+		flag.PrintDefaults()
 
 		os.Exit(0)
 	}
@@ -51,27 +31,44 @@ func main() {
 
 	fmt.Println("hostname:", name)
 
-	host := cfg.listenHost
-	port := cfg.listenPort
 	keyFile := cfg.keyFile
-	keyReset := cfg.resetKeys
+	peerstoreFile := cfg.peerstoreFile
+	if cfg.addPortToFilename {
+		if keyFile != "" {
+			keyFile = fmt.Sprintf("%s%d", keyFile, cfg.listenPort)
+		}
+		if peerstoreFile != "" {
+			peerstoreFile = fmt.Sprintf("%s%d", peerstoreFile, cfg.listenPort)
+		}
+	}
 
-	fmt.Println("host is", host, "and port is", port)
+	peer := Peer{
+		dbAddress:cfg.redisDb,
+		port:cfg.listenPort,
+		protocol:cfg.ProtocolID,
+		hostname:cfg.listenHost,
+		rendezVous:cfg.RendezvousString,
+		peerstoreFile:peerstoreFile,
+		keyFile:keyFile,
+		resetKey:cfg.resetKeys,
+	}
 
-	peer, err := peerInit(port, keyFile, keyReset)
+	err = peer.peerInit()
 
 	if err != nil {
 		fmt.Println("Initializing peer failed")
-		return
+		os.Exit(1)
 	}
 
-	slist := SListener{channelName:"gotest", dbAddress:"localhost:6379", peer:peer}
+	slist := SListener{channelName:cfg.redisChannel, dbAddress:cfg.redisDb, peer:&peer}
 	go slist.dbInit()
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	<-ch
+
+	<- ch
 	fmt.Println("Received signal, shutting down...")
 
 	peer.close()
+	os.Exit(0)
 }

@@ -21,35 +21,29 @@ type Peer struct {
 	rdb  *redis.Client
 	activePeers string
 	allPeers string
-	host host.Host
-	port int
-	hostname string
-	protocol string
-	dbAddress string
+	host       host.Host
+	port       int
+	hostname   string
+	protocol   string
+	dbAddress  string
 	rendezVous string
-	ctx context.Context
-	peerstore PeerStore
-	privKey crypto.PrivKey
+	ctx        context.Context
+	peerstore  PeerStore
+	privKey    crypto.PrivKey
+	keyFile    string
+	resetKey   bool
+	peerstoreFile string
 }
 
-// dbInit function for a peer. It creates the database connection, starts listening for channels. It also initializes
-// everything needed for libp2p and sets up a Host that listens for new connections.
-func peerInit(port int, keyFile string, keyReset bool) (*Peer, error) {
-	var p Peer
-	p.port = port
-	p.hostname = "0.0.0.0"
-	p.protocol = "/chat/1.1.0"
-	p.dbAddress = "localhost:6379"
-	p.rendezVous = "meetme"
-
+func (p *Peer) peerInit() error {
 	err := p.redisInit()
 	if err != nil {
 		fmt.Println("[PEER] Database connection failed -", err)
-		return nil, err
+		return err
 	}
 
 	// prepare p2p host
-	p.p2pInit(keyFile, keyReset)
+	p.p2pInit(p.keyFile, p.resetKey)
 
 	p.activePeers = p.host.ID().Pretty() + "-active"
 	p.allPeers = p.host.ID().Pretty() + "-all"
@@ -60,16 +54,16 @@ func peerInit(port int, keyFile string, keyReset bool) (*Peer, error) {
 	// TODO:     https://stackoverflow.com/questions/26211954/how-do-i-pass-arguments-to-my-handler
 	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
 
-	p.peerstore = PeerStore{store:p.host.Peerstore(), saveFile:fmt.Sprintf("/home/dita/ownCloud/peerstore%d", port)}
+	p.peerstore = PeerStore{store:p.host.Peerstore(), saveFile: p.peerstoreFile}
 	p.peerstore.readFromFile(p.privKey)
 
 	// run peer discovery in the background
 	err = p.discoverPeers()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &p, nil
+	return nil
 }
 
 func (p *Peer) redisInit() error {
