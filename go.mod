@@ -1,4 +1,4 @@
-module github.com/draliii/p2p-experiments
+module github.com/stratosphereips/p2p4slips
 
 require (
 	github.com/go-redis/redis/v7 v7.0.0-beta.6
