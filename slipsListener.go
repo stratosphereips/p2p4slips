@@ -67,7 +67,7 @@ func (s *SListener) handleCommand(message string) {
 	case "ASK":
 		s.ask(parsedMessage[1])
 	default:
-		fmt.Println("[SLISTENER] Invalid command:", parsedMessage[0])
+		fmt.Printf("[SLISTENER] Invalid command: '%s'\n", parsedMessage[0])
 	}
 }
 
@@ -88,13 +88,13 @@ func (s *SListener) ask (message string){
 	parsedMessage := strings.SplitN(message, " ", 2)
 
 	if len(parsedMessage) != 2 {
-		fmt.Printf("[SLISTENER] Can't ask about data - message must be in the correct format 'ASK timeout data'")
+		fmt.Printf("[SLISTENER] Can't ask about data - message must be in the correct format 'ASK timeout data'\n")
 		return
 	}
 
 	timeout, err := strconv.Atoi(parsedMessage[0])
 	if err != nil {
-		fmt.Printf("[SLISTENER] Can't ask about data - '%s' is not a valid timeout in seconds", parsedMessage[0])
+		fmt.Printf("[SLISTENER] Can't ask about data - '%s' is not a valid timeout in seconds\n", parsedMessage[0])
 		return
 	}
 	data := parsedMessage[1]
