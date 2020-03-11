@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peerstore"
-	"github.com/multiformats/go-multiaddr"
 	"io/ioutil"
 	"strings"
 	"time"
@@ -18,21 +16,16 @@ type PeerData struct {
 	Version             string
 	GoodCount           int
 	LastGoodInteraction time.Time
-	LastMultiAddress    []byte
+	LastMultiAddress    string
 }
 
-func (pd *PeerData) checkAndUpdateActivePeerMultiaddr(multiAddress multiaddr.Multiaddr){
-	parsedMA, err := multiAddress.MarshalText()
-
-	if err != nil {
-		fmt.Println("Couldn't parse multiaddress of remote peer")
-		return
-	}
-
-	if bytes.Compare(pd.LastMultiAddress, parsedMA) != 0 {
+func (pd *PeerData) checkAndUpdateActivePeerMultiaddr(multiAddress string){
+	if multiAddress != pd.LastMultiAddress {
+		fmt.Println("Updating multiaddr")
 		// if addresses are different
-		remoteIP := strings.Split(multiAddress.String(), "/")[2]
-		pd.LastMultiAddress = parsedMA
+		pd.LastMultiAddress = multiAddress
+		remoteIP := strings.Split(multiAddress, "/")[2]
+		fmt.Println("new ip", remoteIP)
 		pd.LastUsedIP = remoteIP
 	}
 }

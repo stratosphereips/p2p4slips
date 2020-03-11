@@ -12,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -197,7 +198,8 @@ func (p *Peer) talker(rw *bufio.ReadWriter) {
 func (p *Peer) listener(stream network.Stream) {
 	remotePeer := stream.Conn().RemotePeer()
 	remotePeerStr := remotePeer.Pretty()
-	remoteMA := stream.Conn().RemoteMultiaddr()
+	remoteMA := fmt.Sprintf("%s/p2p/%s", stream.Conn().RemoteMultiaddr(), remotePeerStr)
+	fmt.Println("remotema listener:", remoteMA)
 
 	var remotePeerData *PeerData
 	remotePeerData = p.peerstore.isKnownWithUpdate(remotePeerStr)
@@ -252,7 +254,8 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	// add a simple record into db
 	remotePeer := peerAddress.ID
 	remotePeerStr := remotePeer.Pretty()
-	remoteMA := peerAddress.Addrs[0]
+	remoteMA := fmt.Sprintf("%s/p2p/%s", peerAddress.Addrs[0], remotePeerStr)
+	fmt.Println("remotema sayhello:", remoteMA)
 
 	var remotePeerData *PeerData
 	// add a simple record into db
@@ -371,14 +374,20 @@ func (p *Peer) sendPing(peerData *PeerData) {
 	}
 
 	// parse peer address
-	remoteMA, err := multiaddr.NewMultiaddrBytes(peerData.LastMultiAddress)
+	// remoteMA, err := multiaddr.NewMultiaddrBytes(peerData.LastMultiAddress)
+	remoteMA := peerData.LastMultiAddress
 	// TODO: the parsing fails here, I suppose I call the wrong function
 	fmt.Println(peerData.LastMultiAddress)
+	//if err != nil {
+	//	fmt.Println("multiaddr err:", err)
+	//	return
+	//}
+
+	multiaddr, err := multiaddr.NewMultiaddr(remoteMA)
 	if err != nil {
-		fmt.Println("multiaddr err:", err)
-		return
+		log.Fatalln(err)
 	}
-	remotePeer, err := peer.AddrInfoFromP2pAddr(remoteMA)
+	remotePeer, err := peer.AddrInfoFromP2pAddr(multiaddr)
 	if err != nil {
 		fmt.Println("addrinfo err:", err)
 		return
