@@ -1,18 +1,40 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/multiformats/go-multiaddr"
 	"io/ioutil"
+	"strings"
+	"time"
 )
 
 type PeerData struct {
-	PeerID     string
-	LastUsedIP string
-	Version    string
-	GoodCount  int
+	PeerID              string
+	LastUsedIP          string
+	Version             string
+	GoodCount           int
+	LastGoodInteraction time.Time
+	LastMultiAddress    []byte
+}
+
+func (pd *PeerData) checkAndUpdateActivePeerMultiaddr(multiAddress multiaddr.Multiaddr){
+	parsedMA, err := multiAddress.MarshalText()
+
+	if err != nil {
+		fmt.Println("Couldn't parse multiaddress of remote peer")
+		return
+	}
+
+	if bytes.Compare(pd.LastMultiAddress, parsedMA) != 0 {
+		// if addresses are different
+		remoteIP := strings.Split(multiAddress.String(), "/")[2]
+		pd.LastMultiAddress = parsedMA
+		pd.LastUsedIP = remoteIP
+	}
 }
 
 type PeerStore struct {
@@ -97,12 +119,25 @@ func (ps *PeerStore) isActivePeer(peerId string) *PeerData {
 }
 
 func (ps *PeerStore) isKnown(peerId string) *PeerData {
-	peerData, ok := ps.allPeers[peerId]
+	peerData, ok := ps.activePeers[peerId]
 	if ok {
 		return peerData
 	}
-	peerData, ok = ps.activePeers[peerId]
+	peerData, ok = ps.allPeers[peerId]
 	if ok {
+		return peerData
+	}
+	return nil
+}
+
+func (ps *PeerStore) isKnownWithUpdate(peerId string) *PeerData {
+	peerData, ok := ps.activePeers[peerId]
+	if ok {
+		return peerData
+	}
+	peerData, ok = ps.allPeers[peerId]
+	if ok {
+		ps.activePeers[peerId] = peerData
 		return peerData
 	}
 	return nil
@@ -122,6 +157,25 @@ func (ps *PeerStore) increaseGoodCount(peerId string) {
 
 func (ps *PeerStore) decreaseGoodCount(peerId string) {
 	ps.activePeers[peerId].GoodCount = ps.activePeers[peerId].GoodCount - 1
+}
+
+func (ps *PeerStore) shouldIPingPeer(peerId string) bool {
+	lastSeen := ps.activePeers[peerId].LastGoodInteraction
+
+	if !lastSeen.IsZero() {
+		timeSinceLastSeen := time.Since(lastSeen)
+
+		// TODO: justify the 5 minute constant
+		if timeSinceLastSeen < 5*time.Minute {
+			// do not ping a peer that has been contacted less than five minutes ago
+			return false
+		}
+	}
+
+	// ping all peers, that
+	//  - were never successfully contacted (lastSeen is zero)
+	//  - were contacted more than 5 minutes ago
+	return true
 }
 
 //func (ps *PeerStore) updatePeerIP(peerId peer.ID, value string){

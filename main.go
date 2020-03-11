@@ -67,7 +67,7 @@ func main() {
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 
 	<- ch
-	fmt.Println("Received signal, shutting down...")
+	fmt.Printf("\nReceived signal, shutting down...\n")
 
 	peer.close()
 	os.Exit(0)

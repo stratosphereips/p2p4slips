@@ -195,7 +195,17 @@ func (p *Peer) talker(rw *bufio.ReadWriter) {
 
 func (p *Peer) listener(stream network.Stream) {
 	remotePeer := stream.Conn().RemotePeer()
-	// fmt.Println("[", remotePeer, "] Incoming stream")
+	remotePeerStr := remotePeer.Pretty()
+	remoteMA := stream.Conn().RemoteMultiaddr()
+
+	var remotePeerData *PeerData
+	remotePeerData = p.peerstore.isKnownWithUpdate(remotePeerStr)
+	if remotePeerData == nil {
+		// add a simple record into db
+		remotePeerData = &PeerData{PeerID: remotePeerStr}
+		p.peerstore.activePeers[remotePeerStr] = remotePeerData
+	}
+	remotePeerData.checkAndUpdateActivePeerMultiaddr(remoteMA)
 
 	// Create a buffer stream for non blocking read and write.
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
@@ -215,7 +225,7 @@ func (p *Peer) listener(stream network.Stream) {
 
 	if commands[0] == "hello" {
 		fmt.Println("[", remotePeer, "] New peer says hello to me")
-		p.handleHello(stream, rw, &commands)
+		p.handleHello(remotePeerStr, remotePeerData, rw, &commands)
 		p.GetActivePeers()
 		return
 	}
@@ -241,10 +251,13 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	// add a simple record into db
 	remotePeer := peerAddress.ID
 	remotePeerStr := remotePeer.Pretty()
-	remoteIP := strings.Split(peerAddress.String(), "/")[2]
+	remoteMA := peerAddress.Addrs[0]
 
-	remotePeerData := PeerData{PeerID:remotePeerStr, LastUsedIP:remoteIP}
-	p.peerstore.activePeers[remotePeerStr] = &remotePeerData
+	var remotePeerData *PeerData
+	// add a simple record into db
+	remotePeerData = &PeerData{PeerID: remotePeerStr}
+	p.peerstore.activePeers[remotePeerStr] = remotePeerData
+	remotePeerData.checkAndUpdateActivePeerMultiaddr(remoteMA)
 
 	if err := p.host.Connect(p.ctx, peerAddress); err != nil {
 		fmt.Println("Connection failed:", err)
@@ -305,10 +318,7 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	}
 }
 
-func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command *[]string){
-	remotePeer := stream.Conn().RemotePeer()
-	remotePeerStr := remotePeer.Pretty()
-	remoteIP := strings.Split(stream.Conn().RemoteMultiaddr().String(), "/")[2]
+func (p *Peer) handleHello(remotePeerStr string, remotePeerData *PeerData, rw *bufio.ReadWriter, command *[]string) {
 
 	// parse contents of hello message
 	var remoteVersion string
@@ -320,51 +330,33 @@ func (p *Peer) handleHello(stream network.Stream, rw *bufio.ReadWriter, command 
 		remoteVersion = (*command)[1]
 	}
 
-	var remotePeerData *PeerData
-	remotePeerData = p.peerstore.isKnown(remotePeerStr)
-
-	if remotePeerData == nil {
-		// add a simple record into db
-		remotePeerData = &PeerData{PeerID:remotePeerStr, LastUsedIP:remoteIP}
-		p.peerstore.activePeers[remotePeerStr] = remotePeerData
-
-		// say hello
-		fmt.Println("Sending hello reply...")
-
-		_, err := rw.WriteString("hello version1\n")
-		if err != nil {
-			// TODO: don't panic
-			fmt.Println("Error writing to buffer")
-			// panic(err)
-		}
-
-		err = rw.Flush()
-		if err != nil {
-			// TODO: don't panic
-			fmt.Println("Error flushing buffer")
-			// panic(err)
-		}
-		return
-	}
-	// move to active list, if it was not there already
-	p.peerstore.activePeers[remotePeerStr] = remotePeerData
-
 	if remotePeerData.Version != remoteVersion {
 		// update this info
 		fmt.Println("updating version info")
 		p.peerstore.updatePeerVersion(remotePeerStr, remoteVersion)
-	}
-
-	if remotePeerData.LastUsedIP != remoteIP {
-		// update this info
-		fmt.Println("updating address info")
-		p.peerstore.updatePeerIP(remotePeerStr, remoteIP)
-	}
-
-	if remotePeerData.LastUsedIP == remoteIP && remotePeerData.Version == remoteVersion {
-		// lower his rep
+	} else {
+		// hello message should not be sent unless the version changed or the peer is unknown (changes version as well)
+		fmt.Println("Peer sent unsolicited hello")
 		p.peerstore.decreaseGoodCount(remotePeerStr)
 	}
+
+	// say hello
+	fmt.Println("Sending hello reply...")
+
+	_, err := rw.WriteString("hello version1\n")
+	if err != nil {
+		// TODO: don't panic
+		fmt.Println("Error writing to buffer")
+		// panic(err)
+	}
+
+	err = rw.Flush()
+	if err != nil {
+		// TODO: don't panic
+		fmt.Println("Error flushing buffer")
+		// panic(err)
+	}
+	return
 }
 
 func (p *Peer) sendPing() {
