@@ -12,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -195,10 +196,11 @@ func (p *Peer) talker(rw *bufio.ReadWriter) {
 }
 
 func (p *Peer) listener(stream network.Stream) {
+	defer p.closeStream(stream)
+
 	remotePeer := stream.Conn().RemotePeer()
 	remotePeerStr := remotePeer.Pretty()
 	remoteMA := fmt.Sprintf("%s/p2p/%s", stream.Conn().RemoteMultiaddr(), remotePeerStr)
-	fmt.Println("remotema listener:", remoteMA)
 
 	var remotePeerData *PeerData
 	remotePeerData = p.peerstore.isKnownWithUpdate(remotePeerStr)
@@ -271,6 +273,7 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	// open a stream, this stream will be handled by handleStream other end
 	fmt.Printf("PROTOCOL: %s\n", p.protocol)
 	stream, err := p.host.NewStream(p.ctx, remotePeer, protocol.ID(p.protocol))
+	defer p.closeStream(stream)
 
 	if err != nil {
 		fmt.Println("Stream open failed", err)
@@ -298,14 +301,6 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	fmt.Println("PeerOld response ok, updating reputation")
 	p.peerstore.increaseGoodCount(remotePeerStr)
 	p.peerstore.updatePeerVersion(remotePeerStr, remoteVersion)
-
-	// is this a proper close?
-	err = stream.Close()
-	if err != nil {
-		fmt.Println("Error closing")
-		// TODO: do something here?
-		return
-	}
 }
 
 func (p *Peer) handleHello(remotePeerStr string, remotePeerData *PeerData, rw *bufio.ReadWriter, command *[]string) {
@@ -359,6 +354,7 @@ func (p *Peer) sendPing(peerData *PeerData) {
 	}
 
 	pingStream := p.openStreamFromPeerData(peerData)
+	defer p.closeStream(pingStream)
 	if pingStream == nil {
 		// failure
 	}
@@ -434,7 +430,10 @@ func rw2channel(input chan string, rw *bufio.ReadWriter) {
 	for {
 		result, err := rw.ReadString('\n')
 		if err != nil {
-			fmt.Println("err on rw2channel")
+			if err == io.EOF {
+				return
+			}
+			fmt.Println("err on rw2channel:", err)
 		}
 
 		input <- result
@@ -543,6 +542,14 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream{
 	return stream
 }
 
+func (p *Peer) closeStream(stream network.Stream) {
+	// is this a proper close?
+	err := stream.Close()
+	if err != nil {
+		fmt.Println("Error closing")
+	}
+}
+
 func (p *Peer) sendMessageToStream(stream network.Stream, msg string, timeout time.Duration) (response string, ok bool) {
 
 	// open rw
@@ -564,13 +571,6 @@ func (p *Peer) sendMessageToStream(stream network.Stream, msg string, timeout ti
 		break
 	case <-time.After(timeout * time.Second):
 		fmt.Println("timeout")
-	}
-
-	// is this a proper close?
-	err := stream.Close()
-	if err != nil {
-		fmt.Println("Error closing")
-		return data, false
 	}
 
 	return data, true
