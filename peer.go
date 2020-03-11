@@ -12,7 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -279,17 +278,8 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 		return
 	}
 
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-	fmt.Println("Saying hello")
-	if !send2rw(rw, "hello version1\n") {
-		fmt.Println("error sending")
-		p.peerstore.decreaseGoodCount(remotePeerStr)
-		return
-	}
-
 	input := make(chan string)
-	go rw2channel(input, rw)
+	p.sendMessageToStream(stream, "hello version1\n", input)
 
 	response := ""
 	select{
@@ -373,69 +363,24 @@ func (p *Peer) sendPing(peerData *PeerData) {
 		return
 	}
 
-	// parse peer address
-	// remoteMA, err := multiaddr.NewMultiaddrBytes(peerData.LastMultiAddress)
-	remoteMA := peerData.LastMultiAddress
-	// TODO: the parsing fails here, I suppose I call the wrong function
-	fmt.Println(peerData.LastMultiAddress)
-	//if err != nil {
-	//	fmt.Println("multiaddr err:", err)
-	//	return
-	//}
-
-	multiaddr, err := multiaddr.NewMultiaddr(remoteMA)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	remotePeer, err := peer.AddrInfoFromP2pAddr(multiaddr)
-	if err != nil {
-		fmt.Println("addrinfo err:", err)
-		return
+	pingStream := p.openStreamFromPeerData(peerData)
+	if pingStream == nil {
+		// failure
 	}
 
-	// open stream
-	fmt.Printf("PROTOCOL: %s\n", p.protocol)
-	stream, err := p.host.NewStream(p.ctx, remotePeer.ID, protocol.ID(p.protocol))
-
-	// open rw
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-	fmt.Println("Saying ping")
-	if !send2rw(rw, "ping\n") {
-		fmt.Println("error sending")
-		// p.peerstore.decreaseGoodCount(remotePeerStr)
-		return
-	}
-
-	input := make(chan string)
-	go rw2channel(input, rw)
+	output := make(chan string)
+	p.sendMessageToStream(pingStream, "ping\n", output)
 
 	response := ""
 	select{
-	case response = <- input:
+	case response = <- output:
 		break
 	case <-time.After(5 * time.Second):
 		fmt.Println("timeout")
 	}
-	fmt.Println("text:", response)
 
-
-	fmt.Println("PeerOld response ok, updating reputation")
-	//p.peerstore.increaseGoodCount(remotePeerStr)
-	//p.peerstore.updatePeerVersion(remotePeerStr, remoteVersion)
-
-	// is this a proper close?
-	err = stream.Close()
-	if err != nil {
-		fmt.Println("Error closing")
-		// TODO: do something here?
-		return
-	}
-	// send ping to rw (flush!)
-	// wait for reply
-
-	// if successful: add a new good interaction, update reputation
-	// if unsuccessful: add a new bad interaction. If there are three of them, set peer offline
+	fmt.Println("ping response:", response)
+	// TODO: handle ping response
 }
 
 func (p *Peer) handlePing(stream network.Stream, rw *bufio.ReadWriter, command *[]string) {
@@ -579,4 +524,54 @@ func (p *Peer) pingLoop() {
 	// ping
 	// too many failures?
 	// remove peer from actives
+}
+
+func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream{
+	remoteMA := peerData.LastMultiAddress
+
+	// new multiaddress from string
+	multiaddress, err := multiaddr.NewMultiaddr(remoteMA)
+	if err != nil {
+		fmt.Printf("Error parsing multiaddress '%s': %s\n", remoteMA, err)
+		return nil
+	}
+
+	// addrInfo from multiaddress
+	remotePeer, err := peer.AddrInfoFromP2pAddr(multiaddress)
+	if err != nil {
+		fmt.Println("Error creating addrInfo from multiaddress:", err)
+		return nil
+	}
+
+	// open stream
+	stream, err := p.host.NewStream(p.ctx, remotePeer.ID, protocol.ID(p.protocol))
+	if err != nil {
+		fmt.Println("Error opening stream:", err)
+		return nil
+	}
+
+	return stream
+}
+
+func (p *Peer) sendMessageToStream(stream network.Stream, msg string, output chan string) {
+
+	// open rw
+	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+	fmt.Printf("Sending message: '%s'\n", msg)
+	if !send2rw(rw, msg) {
+		fmt.Println("error sending")
+		// p.peerstore.decreaseGoodCount(remotePeerStr)
+		return
+	}
+
+	go rw2channel(output, rw)
+
+	// is this a proper close?
+	err := stream.Close()
+	if err != nil {
+		fmt.Println("Error closing")
+		// TODO: do something here?
+		return
+	}
 }
