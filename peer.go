@@ -278,15 +278,10 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 		return
 	}
 
-	input := make(chan string)
-	p.sendMessageToStream(stream, "hello version1\n", input)
+	response, ok := p.sendMessageToStream(stream, "hello version1\n", 5)
 
-	response := ""
-	select{
-	case response = <- input:
-		break
-	case <-time.After(5 * time.Second):
-		fmt.Println("timeout")
+	if !ok {
+		fmt.Println("reading response failed")
 	}
 	fmt.Println("text:", response)
 
@@ -368,15 +363,10 @@ func (p *Peer) sendPing(peerData *PeerData) {
 		// failure
 	}
 
-	output := make(chan string)
-	p.sendMessageToStream(pingStream, "ping\n", output)
+	response, ok := p.sendMessageToStream(pingStream, "ping\n", 5)
 
-	response := ""
-	select{
-	case response = <- output:
-		break
-	case <-time.After(5 * time.Second):
-		fmt.Println("timeout")
+	if !ok {
+		fmt.Println("reading response failed")
 	}
 
 	fmt.Println("ping response:", response)
@@ -553,7 +543,7 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream{
 	return stream
 }
 
-func (p *Peer) sendMessageToStream(stream network.Stream, msg string, output chan string) {
+func (p *Peer) sendMessageToStream(stream network.Stream, msg string, timeout time.Duration) (response string, ok bool) {
 
 	// open rw
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
@@ -562,16 +552,26 @@ func (p *Peer) sendMessageToStream(stream network.Stream, msg string, output cha
 	if !send2rw(rw, msg) {
 		fmt.Println("error sending")
 		// p.peerstore.decreaseGoodCount(remotePeerStr)
-		return
+		return "", false
 	}
 
+	output := make(chan string)
+
 	go rw2channel(output, rw)
+	data := ""
+	select{
+	case data = <- output:
+		break
+	case <-time.After(timeout * time.Second):
+		fmt.Println("timeout")
+	}
 
 	// is this a proper close?
 	err := stream.Close()
 	if err != nil {
 		fmt.Println("Error closing")
-		// TODO: do something here?
-		return
+		return data, false
 	}
+
+	return data, true
 }
