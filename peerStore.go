@@ -58,6 +58,10 @@ func (pd *PeerData) addBasicInteraction(rating float64) {
 	timestamp := time.Now()
 	pd.BasicInteractions = append(pd.BasicInteractions, rating)
 	pd.BasicInteractionTimes = append(pd.BasicInteractionTimes, timestamp)
+
+	if rating > 0.5 {
+		pd.LastGoodInteraction = timestamp
+	}
 }
 
 type PeerStore struct {

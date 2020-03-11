@@ -234,7 +234,7 @@ func (p *Peer) listener(stream network.Stream) {
 
 	if str == "ping" {
 		fmt.Println("[", remotePeer, "] says ping")
-		p.handlePing(stream, rw, &commands)
+		p.handlePing(remotePeerStr, remotePeerData, rw)
 		return
 	}
 
@@ -369,20 +369,46 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 		return
 	}
 
-	fmt.Println("ping response:", response)
-	// TODO: handle ping response
-	remotePeerData.addBasicInteraction(1)
+	fmt.Printf("ping response: '%s'\n", response)
+
+	if response == "pong\n" {
+		remotePeerData.addBasicInteraction(1)
+	} else {
+		fmt.Println("Peer sent wrong pong reply")
+		remotePeerData.addBasicInteraction(0)
+	}
 }
 
-func (p *Peer) handlePing(stream network.Stream, rw *bufio.ReadWriter, command *[]string) {
-	// do i have reputation for him in all?
-	// if not: lower reputation. Send hello.
+func (p *Peer) handlePing(remotePeerStr string, remotePeerData *PeerData, rw *bufio.ReadWriter) {
+	// did he send hello before pinging?
+	if remotePeerData.Version == "" {
+		fmt.Println("Peer is sending pings before saying hello")
+		remotePeerData.addBasicInteraction(0)
+	}
 
-	// if last contact was recently, lower score, this is not necessary
+	// is he not pinging me too early?
+	if !remotePeerData.shouldIPingPeer() {
+		fmt.Println("Peer is sending pings too ofter")
+		remotePeerData.addBasicInteraction(0)
+	}
 
 	// reply to ping
-	// increment last contact in reputation
-	// also increment this in all contacts (hello etc)
+	fmt.Println("Sending ping reply...")
+
+	_, err := rw.WriteString("pong\n")
+	if err != nil {
+		fmt.Println("Error writing to buffer")
+		remotePeerData.addBasicInteraction(0)
+		return
+	}
+	err = rw.Flush()
+	if err != nil {
+		fmt.Println("Error flushing buffer")
+		remotePeerData.addBasicInteraction(0)
+		return
+	}
+
+	remotePeerData.addBasicInteraction(1)
 }
 
 func (p *Peer) GetActivePeers() *map[string]*Reputation {
