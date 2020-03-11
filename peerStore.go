@@ -11,12 +11,14 @@ import (
 )
 
 type PeerData struct {
-	PeerID              string
-	LastUsedIP          string
-	Version             string
-	GoodCount           int
-	LastGoodInteraction time.Time
-	LastMultiAddress    string
+	PeerID                string
+	LastUsedIP            string
+	Version               string
+	GoodCount             int
+	LastGoodInteraction   time.Time
+	LastMultiAddress      string
+	BasicInteractions     []float64
+	BasicInteractionTimes []time.Time
 }
 
 func (pd *PeerData) checkAndUpdateActivePeerMultiaddr(multiAddress string){
@@ -49,6 +51,13 @@ func (pd *PeerData) shouldIPingPeer() bool {
 	//  - were never successfully contacted (lastSeen is zero)
 	//  - were contacted more than 5 minutes ago
 	return true
+}
+
+func (pd *PeerData) addBasicInteraction(rating float64) {
+	// TODO change ping to include latency in score
+	timestamp := time.Now()
+	pd.BasicInteractions = append(pd.BasicInteractions, rating)
+	pd.BasicInteractionTimes = append(pd.BasicInteractionTimes, timestamp)
 }
 
 type PeerStore struct {
@@ -163,14 +172,6 @@ func (ps *PeerStore) updatePeerIP(peerId string, value string){
 
 func (ps *PeerStore) updatePeerVersion(peerId string, value string){
 	ps.activePeers[peerId].Version = value
-}
-
-func (ps *PeerStore) increaseGoodCount(peerId string) {
-	ps.activePeers[peerId].GoodCount = ps.activePeers[peerId].GoodCount + 1
-}
-
-func (ps *PeerStore) decreaseGoodCount(peerId string) {
-	ps.activePeers[peerId].GoodCount = ps.activePeers[peerId].GoodCount - 1
 }
 
 //func (ps *PeerStore) updatePeerIP(peerId peer.ID, value string){
