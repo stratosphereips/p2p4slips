@@ -37,6 +37,27 @@ func (pd *PeerData) checkAndUpdateActivePeerMultiaddr(multiAddress multiaddr.Mul
 	}
 }
 
+func (pd *PeerData) shouldIPingPeer() bool {
+	lastSeen := pd.LastGoodInteraction
+	fmt.Printf("last seen: %s\n", lastSeen)
+
+	if !lastSeen.IsZero() {
+		timeSinceLastSeen := time.Since(lastSeen)
+		fmt.Printf("time since last seen: %s\n", timeSinceLastSeen)
+
+		// TODO: justify the constant
+		if timeSinceLastSeen < 15*time.Second {
+			// do not ping a peer that has been contacted less than five minutes ago
+			return false
+		}
+	}
+
+	// ping all peers, that
+	//  - were never successfully contacted (lastSeen is zero)
+	//  - were contacted more than 5 minutes ago
+	return true
+}
+
 type PeerStore struct {
 	store       peerstore.Peerstore
 	saveFile    string
@@ -157,25 +178,6 @@ func (ps *PeerStore) increaseGoodCount(peerId string) {
 
 func (ps *PeerStore) decreaseGoodCount(peerId string) {
 	ps.activePeers[peerId].GoodCount = ps.activePeers[peerId].GoodCount - 1
-}
-
-func (ps *PeerStore) shouldIPingPeer(peerId string) bool {
-	lastSeen := ps.activePeers[peerId].LastGoodInteraction
-
-	if !lastSeen.IsZero() {
-		timeSinceLastSeen := time.Since(lastSeen)
-
-		// TODO: justify the 5 minute constant
-		if timeSinceLastSeen < 5*time.Minute {
-			// do not ping a peer that has been contacted less than five minutes ago
-			return false
-		}
-	}
-
-	// ping all peers, that
-	//  - were never successfully contacted (lastSeen is zero)
-	//  - were contacted more than 5 minutes ago
-	return true
 }
 
 //func (ps *PeerStore) updatePeerIP(peerId peer.ID, value string){

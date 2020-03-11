@@ -63,6 +63,7 @@ func (p *Peer) peerInit() error {
 		return err
 	}
 
+	go p.pingLoop()
 	return nil
 }
 
@@ -266,6 +267,7 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	}
 
 	// open a stream, this stream will be handled by handleStream other end
+	fmt.Printf("PROTOCOL: %s\n", p.protocol)
 	stream, err := p.host.NewStream(p.ctx, remotePeer, protocol.ID(p.protocol))
 
 	if err != nil {
@@ -356,14 +358,70 @@ func (p *Peer) handleHello(remotePeerStr string, remotePeerData *PeerData, rw *b
 		fmt.Println("Error flushing buffer")
 		// panic(err)
 	}
+
+	p.peerstore.increaseGoodCount(remotePeerStr)
 	return
 }
 
-func (p *Peer) sendPing() {
+func (p *Peer) sendPing(peerData *PeerData) {
 	// check last ping time, if it was recently, do not ping at all
+	if !peerData.shouldIPingPeer() {
+		fmt.Println("Peer was contacted recently, no need for ping")
+		return
+	}
+
+	// parse peer address
+	remoteMA, err := multiaddr.NewMultiaddrBytes(peerData.LastMultiAddress)
+	// TODO: the parsing fails here, I suppose I call the wrong function
+	fmt.Println(peerData.LastMultiAddress)
+	if err != nil {
+		fmt.Println("multiaddr err:", err)
+		return
+	}
+	remotePeer, err := peer.AddrInfoFromP2pAddr(remoteMA)
+	if err != nil {
+		fmt.Println("addrinfo err:", err)
+		return
+	}
 
 	// open stream
+	fmt.Printf("PROTOCOL: %s\n", p.protocol)
+	stream, err := p.host.NewStream(p.ctx, remotePeer.ID, protocol.ID(p.protocol))
+
 	// open rw
+	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+	fmt.Println("Saying ping")
+	if !send2rw(rw, "ping\n") {
+		fmt.Println("error sending")
+		// p.peerstore.decreaseGoodCount(remotePeerStr)
+		return
+	}
+
+	input := make(chan string)
+	go rw2channel(input, rw)
+
+	response := ""
+	select{
+	case response = <- input:
+		break
+	case <-time.After(5 * time.Second):
+		fmt.Println("timeout")
+	}
+	fmt.Println("text:", response)
+
+
+	fmt.Println("PeerOld response ok, updating reputation")
+	//p.peerstore.increaseGoodCount(remotePeerStr)
+	//p.peerstore.updatePeerVersion(remotePeerStr, remoteVersion)
+
+	// is this a proper close?
+	err = stream.Close()
+	if err != nil {
+		fmt.Println("Error closing")
+		// TODO: do something here?
+		return
+	}
 	// send ping to rw (flush!)
 	// wait for reply
 
@@ -493,4 +551,23 @@ func (p *Peer) close(){
 	if err := p.host.Close(); err != nil {
 		panic(err)
 	}
+}
+
+func (p *Peer) pingLoop() {
+	for {
+		fmt.Println("[LOOP] printing active peers:")
+		for peerID := range p.peerstore.activePeers {
+			peerData := p.peerstore.activePeers[peerID]
+			fmt.Printf("[LOOP] peer %s: %d\n", peerID, peerData.GoodCount)
+			p.sendPing(peerData)
+		}
+		fmt.Println("[LOOP] done, sleeping 10s")
+		time.Sleep(10 * time.Second)
+	}
+	// sleep
+	// for each active peer
+	// should i ping?
+	// ping
+	// too many failures?
+	// remove peer from actives
 }
