@@ -574,10 +574,14 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream{
 }
 
 func (p *Peer) closeStream(stream network.Stream) {
-	// is this a proper close?
+	if stream == nil {
+		// nil streams cause SIGSEGV errs when they are closed
+		// fmt.Println("Stream is nil, not closing")
+		return
+	}
 	err := stream.Close()
 	if err != nil {
-		fmt.Println("Error closing")
+		fmt.Println("Error closing stream")
 	}
 }
 
