@@ -216,13 +216,16 @@ func (p *Peer) listener(stream network.Stream) {
 
 	str, err := rw.ReadString('\n')
 
-	// remove trailing newlines
-	str = str[:len(str)-1]
-
 	if err != nil {
 		fmt.Println("Error reading from buffer")
 		remotePeerData.addBasicInteraction(0)
+		return
 	}
+
+	// remove trailing newlines
+	fmt.Println("String:", str)
+	fmt.Println("Err:", err)
+	str = str[:len(str)-1]
 
 	commands := strings.Fields(str)
 
