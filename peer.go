@@ -222,6 +222,12 @@ func (p *Peer) listener(stream network.Stream) {
 		return
 	}
 
+	if len(str) == 0 {
+		fmt.Println("Peer sent empty message")
+		remotePeerData.addBasicInteraction(0)
+		return
+	}
+
 	// remove trailing newlines
 	fmt.Println("String:", str)
 	fmt.Println("Err:", err)
