@@ -226,6 +226,13 @@ func (p *Peer) listener(stream network.Stream) {
 
 	commands := strings.Fields(str)
 
+	if len(commands) == 0 {
+		// peer sent empty message
+		fmt.Println("[", remotePeer, "] sent an empty string")
+		remotePeerData.addBasicInteraction(0)
+		return
+	}
+
 	if commands[0] == "hello" {
 		fmt.Println("[", remotePeer, "] New peer says hello to me")
 		p.handleHello(remotePeerStr, remotePeerData, rw, &commands)
@@ -235,11 +242,6 @@ func (p *Peer) listener(stream network.Stream) {
 	if str == "ping" {
 		fmt.Println("[", remotePeer, "] says ping")
 		p.handlePing(remotePeerStr, remotePeerData, rw)
-		return
-	}
-
-	if str == "\n" {
-		fmt.Println("[", remotePeer, "] sent an empty string")
 		return
 	}
 
@@ -278,7 +280,7 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 		return
 	}
 
-	response, ok := p.sendMessageToStream(stream, "hello version1\n", 5)
+	response, ok := p.sendMessageToStream(stream, "hello version1\n", 10)
 
 	if !ok {
 		fmt.Println("Reading response failed")
@@ -361,7 +363,7 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 		return
 	}
 
-	response, ok := p.sendMessageToStream(pingStream, "ping\n", 5)
+	response, ok := p.sendMessageToStream(pingStream, "ping\n", 10)
 
 	if !ok {
 		fmt.Println("Reading ping response failed")
@@ -536,7 +538,7 @@ func (p *Peer) pingLoop() {
 			p.sendPing(peerData)
 		}
 		fmt.Println("[LOOP] done, sleeping 10s")
-		time.Sleep(10 * time.Second)
+		time.Sleep(25 * time.Second)
 	}
 	// sleep
 	// for each active peer
