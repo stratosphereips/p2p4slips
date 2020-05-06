@@ -45,7 +45,6 @@ func (dw *DBWrapper) initDB(){
 func (dw *DBWrapper) sharePeerDataUpdate(data *PeerData){
 	peerID := data.PeerID
 	ip := data.LastUsedIP
-	// TODO: use the correct reliability measure here, I am not sure what GoodCound really is
 	reliability := data.Reliability
 
 	pdu := &PeerDataUpdate{
@@ -56,28 +55,14 @@ func (dw *DBWrapper) sharePeerDataUpdate(data *PeerData){
 
 	strJson := pdu.pdu2json()
 
-	fmt.Println("JSON of peerdata")
-	fmt.Println(strJson)
-	fmt.Println("")
-
+	dw.sendStringToChannel("peer_update " + strJson)
 }
 
-func sharePeerDataUpdate(data *PeerData){
-	peerID := data.PeerID
-	ip := data.LastUsedIP
-	// TODO: use the correct reliability measure here, I am not sure what GoodCound really is
-	reliability := data.Reliability
+func (dw *DBWrapper) sendStringToChannel(message string){
 
-	pdu := &PeerDataUpdate{
-		PeerID:      peerID,
-		Ip:          ip,
-		Reliability: reliability,
-	}
-
-	strJson := pdu.pdu2json()
-
-	fmt.Println("JSON of peerdata")
-	fmt.Println(strJson)
+	fmt.Println("")
+	fmt.Println("[MESSAGE TO p2p_gopy]", message)
 	fmt.Println("")
 
+	dw.rdb.Publish("p2p_gopy", message)
 }
