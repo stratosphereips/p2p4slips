@@ -34,6 +34,7 @@ type Peer struct {
 	keyFile    string
 	resetKey   bool
 	peerstoreFile string
+	dbw *DBWrapper
 }
 
 func (p *Peer) peerInit() error {
@@ -55,7 +56,7 @@ func (p *Peer) peerInit() error {
 	// TODO:     https://stackoverflow.com/questions/26211954/how-do-i-pass-arguments-to-my-handler
 	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
 
-	p.peerstore = PeerStore{store:p.host.Peerstore(), saveFile: p.peerstoreFile}
+	p.peerstore = PeerStore{store:p.host.Peerstore(), saveFile: p.peerstoreFile, dbw:p.dbw}
 	p.peerstore.readFromFile(p.privKey)
 
 	// run peer discovery in the background
@@ -269,7 +270,7 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 	var remotePeerData *PeerData
 	// add a simple record into db
 	remotePeerData = &PeerData{PeerID: remotePeerStr}
-	p.peerstore.activePeers[remotePeerStr] = remotePeerData
+	p.peerstore.addNewPeer(remotePeerData)
 	remotePeerData.checkAndUpdateActivePeerMultiaddr(remoteMA)
 
 	if err := p.host.Connect(p.ctx, peerAddress); err != nil {
@@ -280,6 +281,8 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo){
 
 	// open a stream, this stream will be handled by handleStream other end
 	fmt.Printf("PROTOCOL: %s\n", p.protocol)
+	fmt.Println("XXX remotepeer:", remotePeer)
+	fmt.Printf("XXX remotepeertype: %T\n", remotePeer)
 	stream, err := p.host.NewStream(p.ctx, remotePeer, protocol.ID(p.protocol))
 	defer p.closeStream(stream)
 
@@ -575,6 +578,8 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream{
 	}
 
 	// open stream
+	fmt.Println("YYY remotepeer:", remotePeer.ID)
+	fmt.Printf("YYY remotepeertype: %T\n", remotePeer.ID)
 	stream, err := p.host.NewStream(p.ctx, remotePeer.ID, protocol.ID(p.protocol))
 	if err != nil {
 		fmt.Println("Error opening stream:", err)

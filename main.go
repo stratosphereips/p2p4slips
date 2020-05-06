@@ -42,6 +42,9 @@ func main() {
 		}
 	}
 
+	dbw := &DBWrapper{dbAddress: ""}
+	dbw.initDB()
+
 	peer := Peer{
 		dbAddress:cfg.redisDb,
 		port:cfg.listenPort,
@@ -51,6 +54,7 @@ func main() {
 		peerstoreFile:peerstoreFile,
 		keyFile:keyFile,
 		resetKey:cfg.resetKeys,
+		dbw:dbw,
 	}
 
 	err = peer.peerInit()

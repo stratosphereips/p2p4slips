@@ -69,6 +69,7 @@ type PeerStore struct {
 	saveFile    string
 	allPeers    map[string]*PeerData
 	activePeers map[string]*PeerData
+	dbw         *DBWrapper
 }
 
 func (ps *PeerStore) saveToFile (key crypto.PrivKey) error {
@@ -170,12 +171,19 @@ func (ps *PeerStore) isKnownWithUpdate(peerId string) *PeerData {
 	return nil
 }
 
+func (ps *PeerStore) addNewPeer(data *PeerData){
+	ps.activePeers[data.PeerID] = data
+	ps.dbw.sharePeerDataUpdate(data)
+}
+
 func (ps *PeerStore) updatePeerIP(peerId string, value string){
 	ps.activePeers[peerId].LastUsedIP = value
+	ps.dbw.sharePeerDataUpdate(ps.activePeers[peerId])
 }
 
 func (ps *PeerStore) updatePeerVersion(peerId string, value string){
 	ps.activePeers[peerId].Version = value
+	ps.dbw.sharePeerDataUpdate(ps.activePeers[peerId])
 }
 
 //func (ps *PeerStore) updatePeerIP(peerId peer.ID, value string){
