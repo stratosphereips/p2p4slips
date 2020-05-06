@@ -63,8 +63,9 @@ func (pd *PeerData) addBasicInteraction(rating float64) {
 		pd.LastGoodInteraction = timestamp
 	}
 
+	// TODO: improve reliability computation
 	pd.Reliability = average(pd.BasicInteractions)
-
+	dbw.sharePeerDataUpdate(pd)
 }
 
 type PeerStore struct {

@@ -55,7 +55,7 @@ func (p *Peer) peerInit() error {
 	// TODO:     https://stackoverflow.com/questions/26211954/how-do-i-pass-arguments-to-my-handler
 	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
 
-	p.peerstore = PeerStore{store:p.host.Peerstore(), saveFile: p.peerstoreFile, dbw:p.dbw}
+	p.peerstore = PeerStore{store:p.host.Peerstore(), saveFile: p.peerstoreFile}
 	p.peerstore.readFromFile(p.privKey)
 
 	// run peer discovery in the background
