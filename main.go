@@ -8,6 +8,8 @@ import (
 	"syscall"
 )
 
+var dbw *DBWrapper
+
 func main() {
 	help := flag.Bool("help", false, "Display Help")
 	cfg := parseFlags()
@@ -42,7 +44,7 @@ func main() {
 		}
 	}
 
-	dbw := &DBWrapper{dbAddress: ""}
+	dbw = &DBWrapper{dbAddress: ""}
 	dbw.initDB()
 
 	peer := Peer{
@@ -54,7 +56,6 @@ func main() {
 		peerstoreFile:peerstoreFile,
 		keyFile:keyFile,
 		resetKey:cfg.resetKeys,
-		dbw:dbw,
 	}
 
 	err = peer.peerInit()

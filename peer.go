@@ -34,7 +34,6 @@ type Peer struct {
 	keyFile    string
 	resetKey   bool
 	peerstoreFile string
-	dbw *DBWrapper
 }
 
 func (p *Peer) peerInit() error {

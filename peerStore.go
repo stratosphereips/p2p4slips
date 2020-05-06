@@ -14,7 +14,7 @@ type PeerData struct {
 	PeerID                string
 	LastUsedIP            string
 	Version               string
-	GoodCount             int
+	Reliability           float64
 	LastGoodInteraction   time.Time
 	LastMultiAddress      string
 	BasicInteractions     []float64
@@ -62,6 +62,9 @@ func (pd *PeerData) addBasicInteraction(rating float64) {
 	if rating > 0.5 {
 		pd.LastGoodInteraction = timestamp
 	}
+
+	pd.Reliability = average(pd.BasicInteractions)
+
 }
 
 type PeerStore struct {
@@ -184,6 +187,14 @@ func (ps *PeerStore) updatePeerIP(peerId string, value string){
 func (ps *PeerStore) updatePeerVersion(peerId string, value string){
 	ps.activePeers[peerId].Version = value
 	ps.dbw.sharePeerDataUpdate(ps.activePeers[peerId])
+}
+
+func average(xs []float64) float64 {
+	total := 0.0
+	for _,v := range xs {
+		total += v
+	}
+	return total / float64(len(xs))
 }
 
 //func (ps *PeerStore) updatePeerIP(peerId peer.ID, value string){

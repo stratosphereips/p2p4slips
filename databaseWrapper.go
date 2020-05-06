@@ -10,7 +10,7 @@ import (
 type PeerDataUpdate struct {
 	PeerID       string    `json:"peerid"`
 	Ip           string    `json:"ip"`
-	Reliability  int       `json:"reliability,omitempty"`
+	Reliability  float64   `json:"reliability,omitempty"`
 	// `json...` makes the properties to parse correctly when using json.Marshal
 }
 
@@ -42,12 +42,31 @@ func (dw *DBWrapper) initDB(){
 	}
 }
 
-
 func (dw *DBWrapper) sharePeerDataUpdate(data *PeerData){
 	peerID := data.PeerID
 	ip := data.LastUsedIP
 	// TODO: use the correct reliability measure here, I am not sure what GoodCound really is
-	reliability := data.GoodCount
+	reliability := data.Reliability
+
+	pdu := &PeerDataUpdate{
+		PeerID:      peerID,
+		Ip:          ip,
+		Reliability: reliability,
+	}
+
+	strJson := pdu.pdu2json()
+
+	fmt.Println("JSON of peerdata")
+	fmt.Println(strJson)
+	fmt.Println("")
+
+}
+
+func sharePeerDataUpdate(data *PeerData){
+	peerID := data.PeerID
+	ip := data.LastUsedIP
+	// TODO: use the correct reliability measure here, I am not sure what GoodCound really is
+	reliability := data.Reliability
 
 	pdu := &PeerDataUpdate{
 		PeerID:      peerID,
