@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-redis/redis/v7"
-	"net"
 	"strconv"
 	"strings"
 )
@@ -70,21 +69,25 @@ func (s *SListener) handleCommand(message string) {
 		return
 	}
 
-	fmt.Println(ps)
+	fmt.Println("[SLISTENER] Message data sent from slips", ps)
 
-	// split message to two parts, command (first word) and the rest
-	parsedMessage := strings.SplitN(message, " ", 2)
+	// check if timeout is set (send only, or send and wait)
+	// call respective functions in Peer
 
-	switch parsedMessage[0] {
-	case "BLAME":
-		s.blame(parsedMessage[1])
-	case "BROADCAST":
-		s.broadcast(parsedMessage[1])
-	case "ASK":
-		s.ask(parsedMessage[1])
-	default:
-		fmt.Printf("[SLISTENER] Invalid command: '%s'\n", parsedMessage[0])
-	}
+	// the functions should:
+	// check if peer is known
+	// handle * as recipient
+
+	// send message to peer
+
+	// wait till remote peer replies
+	// update peer reliability
+	// return string if any message was received
+
+	// this function should then (in case of send and wait)
+	// collect responses and create a response object
+	// send this object to slips in the given report format {reporter, report_time, message}
+
 }
 
 func (s *SListener) parseJson(message string) (*PigeonScroll, error) {
@@ -106,15 +109,6 @@ func (s *SListener) parseJson(message string) (*PigeonScroll, error) {
 	}
 
 	return ps, nil
-}
-
-func (s *SListener) blame (data string){
-	if net.ParseIP(data) == nil {
-		fmt.Printf("[SLISTENER] Can't blame '%s' - not a valid IP\n", data)
-		return
-	}
-
-	s.peer.Blame(data)
 }
 
 func (s *SListener) broadcast (data string){
