@@ -68,6 +68,8 @@ func main() {
 	slist := SListener{channelName:cfg.redisChannel, dbAddress:cfg.redisDb, peer:&peer}
 	go slist.dbInit()
 
+	go runTests(cfg.redisDb)
+
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 

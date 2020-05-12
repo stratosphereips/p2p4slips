@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v7"
 	"net"
@@ -13,6 +14,11 @@ type SListener struct {
 	channelName string
 	rdb  *redis.Client
 	peer *Peer
+}
+
+type PigeonScroll struct {
+	Message   string `json:"message"`
+	Recipient string `json:"recipient"`
 }
 
 func (s *SListener) dbInit(){
@@ -56,6 +62,8 @@ func (s *SListener) dbInit(){
 func (s *SListener) handleCommand(message string) {
 	fmt.Println("[SLISTENER] New message from REDIS:", message)
 
+	s.parseJson(message)
+
 	// split message to two parts, command (first word) and the rest
 	parsedMessage := strings.SplitN(message, " ", 2)
 
@@ -69,6 +77,17 @@ func (s *SListener) handleCommand(message string) {
 	default:
 		fmt.Printf("[SLISTENER] Invalid command: '%s'\n", parsedMessage[0])
 	}
+}
+
+func (s *SListener) parseJson(message string){
+	ps := &PigeonScroll{}
+
+	if err := json.Unmarshal([]byte(message), ps); err != nil {
+		panic(err)
+	}
+	fmt.Println("parsing json went ok")
+	fmt.Println(ps.Message)
+	fmt.Println(ps.Recipient)
 }
 
 func (s *SListener) blame (data string){

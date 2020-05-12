@@ -39,7 +39,7 @@ func parseFlags() *config {
 		"filenames for convenient running of more peers on one host. Set to true to keep filenames unchanged")
 
 	flag.StringVar(&c.redisDb, "redis-db", "localhost:6379", "Remote redis database")
-	flag.StringVar(&c.redisChannel, "redis-channel", "gotest", "Channel for listening to commands")
+	flag.StringVar(&c.redisChannel, "redis-channel", "p2p_pygo", "Channel for listening to commands")
 
 	flag.Parse()
 	return c
