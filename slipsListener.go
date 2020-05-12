@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/go-redis/redis/v7"
 	"net"
@@ -62,7 +63,14 @@ func (s *SListener) dbInit(){
 func (s *SListener) handleCommand(message string) {
 	fmt.Println("[SLISTENER] New message from REDIS:", message)
 
-	s.parseJson(message)
+	ps, err := s.parseJson(message)
+
+	if err != nil {
+		fmt.Println("[SLISTENER] invalid json received from Slips")
+		return
+	}
+
+	fmt.Println(ps)
 
 	// split message to two parts, command (first word) and the rest
 	parsedMessage := strings.SplitN(message, " ", 2)
@@ -79,15 +87,25 @@ func (s *SListener) handleCommand(message string) {
 	}
 }
 
-func (s *SListener) parseJson(message string){
+func (s *SListener) parseJson(message string) (*PigeonScroll, error) {
 	ps := &PigeonScroll{}
 
 	if err := json.Unmarshal([]byte(message), ps); err != nil {
-		panic(err)
+		fmt.Println("[SLISTENER] ", err)
+		return nil, err
 	}
-	fmt.Println("parsing json went ok")
-	fmt.Println(ps.Message)
-	fmt.Println(ps.Recipient)
+
+	if ps.Message == "" {
+		fmt.Println("[SLISTENER] JSON is missing the Message field")
+		return nil, errors.New("message field missing")
+	}
+
+	if ps.Recipient == "" {
+		fmt.Println("[SLISTENER] JSON is missing the Recipient field")
+		return nil, errors.New("recipient field missing")
+	}
+
+	return ps, nil
 }
 
 func (s *SListener) blame (data string){
