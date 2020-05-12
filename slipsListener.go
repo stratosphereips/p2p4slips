@@ -20,25 +20,30 @@ type PigeonScroll struct {
 	Recipient string `json:"recipient"`
 }
 
-func (s *SListener) dbInit(){
+func (s *SListener) dbInit() error {
 
 	// connect to the database
-	// TODO: not crashing when database is offline would be nice
 	s.rdb = redis.NewClient(&redis.Options{
 		Addr:     s.dbAddress,
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
 
+	pongErr := s.rdb.Ping().Err()
+
+	if pongErr != nil {
+		fmt.Println("[PEER] Database connection failed -", pongErr)
+		return pongErr
+	}
+
 	// taken from https://godoc.org/github.com/go-redis/redis#example-PubSub-Receive
-	// TODO: name channel, so multiple peers can run with one redis
 	pubsub := s.rdb.Subscribe(s.channelName)
 
 	// Wait for confirmation that subscription is created before publishing anything.
 	_, err := pubsub.Receive()
 	if err != nil {
 		fmt.Printf("[ERROR] Database connection failed - %s\n", err)
-		return
+		return err
 	}
 
 	// Go channel which receives messages.
@@ -56,6 +61,8 @@ func (s *SListener) dbInit(){
 		// I don't know where to catch this, but it is not a problem. When redis is restarted, pubsub listens again
 		s.handleCommand(msg.Payload)
 	}
+
+	return nil
 }
 
 func (s *SListener) handleCommand(message string) {

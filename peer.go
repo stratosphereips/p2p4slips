@@ -58,9 +58,6 @@ func (p *Peer) peerInit() error {
 	p.allPeers = p.host.ID().Pretty() + "-all"
 
 	// link to a listener for new connections
-	// TODO: this can't be tested that easily on localhost, as they will connect to the same db. Perhaps more redises?
-	// TODO: this needs access to the db object. It can be global or passed in a function:
-	// TODO:     https://stackoverflow.com/questions/26211954/how-do-i-pass-arguments-to-my-handler
 	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
 
 	p.peerstore = PeerStore{store: p.host.Peerstore(), saveFile: p.peerstoreFile}
@@ -78,8 +75,6 @@ func (p *Peer) peerInit() error {
 
 func (p *Peer) redisInit() error {
 	// connect to the database
-	// TODO: not crashing when database is offline would be nice
-	//  also when database shuts down while this is still running...
 	p.rdb = redis.NewClient(&redis.Options{
 		Addr:     p.dbAddress,
 		Password: "", // no password set
@@ -239,8 +234,8 @@ func (p *Peer) listener(stream network.Stream) {
 	}
 
 	// remove trailing newlines
-	fmt.Println("String:", str)
-	fmt.Println("Err:", err)
+	// fmt.Println("String:", str)
+	// fmt.Println("Err:", err)
 	str = str[:len(str)-1]
 
 	commands := strings.Fields(str)

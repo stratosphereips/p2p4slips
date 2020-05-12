@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/go-redis/redis/v7"
 	"time"
 )
@@ -11,6 +12,13 @@ func runTests(dbAddress string, pyGoChannel string){
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
+
+	pongErr := rdb.Ping().Err()
+
+	if pongErr != nil {
+		fmt.Println("[PEER] Database connection failed -", pongErr)
+		return
+	}
 
 	time.Sleep(3 * time.Second)
 	var data string
