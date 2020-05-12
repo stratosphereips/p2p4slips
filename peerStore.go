@@ -64,6 +64,7 @@ func (pd *PeerData) addBasicInteraction(rating float64) {
 	}
 
 	// TODO: improve reliability computation
+	// TODO: only share updates if there is something new
 	pd.Reliability = average(pd.BasicInteractions)
 	dbw.sharePeerDataUpdate(pd)
 }

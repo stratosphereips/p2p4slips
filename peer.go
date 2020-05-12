@@ -280,13 +280,12 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo) {
 		return
 	}
 
-	response, ok := p.sendMessageToPeerData(remotePeerData, "hello version1\n", 10)
+	response, ok := p.sendMessageToPeerData(remotePeerData, "hello version1\n", 10 * time.Second)
 
 	if !ok {
-		fmt.Println("Reading response failed")
-		remotePeerData.addBasicInteraction(0)
 		return
 	}
+
 	fmt.Println("text:", response)
 
 	command := strings.Fields(response)
@@ -348,7 +347,7 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 		return
 	}
 
-	response, ok := p.sendMessageToPeerData(remotePeerData, "ping\n", 10)
+	response, ok := p.sendMessageToPeerData(remotePeerData, "ping\n", 10 * time.Second)
 
 	if !ok {
 		return
@@ -479,25 +478,41 @@ func (p *Peer) pingLoop() {
 	// remove peer from actives
 }
 
-
+// Send specified message to the provided peer. Return the peer's reply (string) and success (bool)
+// All connection errors affect the peer's reliability, there is no need to update it based on the success bool
+// peerData: data of the target peer
+// message: the string to send to the target peer
+// timeout: timeout to wait for reply. If timeout is set to 0, the stream is closed right after sending, without reading any replies.
+// return response string: the response sent by the peer. Empty string if timeout is zero or if there were errors
+// return success bool: true if everything went smoothly, false in case of errors (or no reply from peer)
 func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout time.Duration) (string, bool){
+	// open stream
 	stream := p.openStreamFromPeerData(peerData)
+	// close stream when this function exits (useful to have it here, since there are multiple returns)
 	defer p.closeStream(stream)
+
+	// give up if stream opening failed, lower peer's reliability
 	if stream == nil {
-		fmt.Println("Couldn't open stream for ping")
+		fmt.Println("Couldn't open the stream")
 		peerData.addBasicInteraction(0)
 		return "", false
 	}
 
+	// send message to the stream, read response
 	response, ok := p.sendMessageToStream(stream, message, timeout)
 
+	// lower peer's reputation in case of errors
 	if !ok {
+		fmt.Println("Couldn't send the message")
 		peerData.addBasicInteraction(0)
 	}
 
 	return response, ok
 }
 
+// Open a stream to the remote peer. Return the stream, or nil in case of errors. Peer reliability is not modified.
+// peerData: data of the target peer
+// return stream network.Stream: a stream with the given peer, or nil in case of errors
 func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
 	remoteMA := peerData.LastMultiAddress
 
@@ -527,36 +542,49 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
 	return stream
 }
 
-func (p *Peer) sendMessageToStream(stream network.Stream, msg string, timeout time.Duration) (response string, ok bool) {
+// Send specified message to the provided stream. Return the reply (string) and success (bool). Peer reliability is not modified.
+// stream: stream to the target peer
+// message: the string to send to the stream
+// timeout: timeout to wait for reply. If timeout is set to 0, the function exits without reading any replies.
+// return response string: the response read from the stream. Empty string if timeout is zero or if there were errors
+// return success bool: true if everything went smoothly, false in case of errors (or no reply from peer)
+func (p *Peer) sendMessageToStream(stream network.Stream, message string, timeout time.Duration) (response string, ok bool) {
 
 	// open rw
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 
-	fmt.Printf("Sending message: '%s'\n", msg)
-	if !send2rw(rw, msg) {
+	// send message
+	fmt.Printf("Sending message: '%s'\n", message)
+	if !send2rw(rw, message) {
 		fmt.Println("error sending")
-		// p.peerstore.decreaseGoodCount(remotePeerStr)
 		return "", false
 	}
 
+	// if timeout is zero, end here
 	if timeout == 0 {
 		return "", true
 	}
 
+	// collect reply from the stream to a channel
 	output := make(chan string)
-
 	go rw2channel(output, rw)
 	data := ""
+
+	// wait for whichever process returns first: reading from the stream, or timeout
 	select {
 	case data = <-output:
+		// peer sent something
 		break
-	case <-time.After(timeout * time.Second):
+	case <-time.After(timeout):
+		// peer didn't respond in time
 		fmt.Println("timeout")
+		return data, false
 	}
 
 	return data, true
 }
 
+// Send message to the read writer. Return true if it went ok, false in case of errors
 func send2rw(rw *bufio.ReadWriter, message string) bool {
 	_, err := rw.WriteString(message)
 
@@ -573,6 +601,7 @@ func send2rw(rw *bufio.ReadWriter, message string) bool {
 	return true
 }
 
+// Read messages from read writer and direct them to a channel
 func rw2channel(input chan string, rw *bufio.ReadWriter) {
 	for {
 		result, err := rw.ReadString('\n')
@@ -587,6 +616,7 @@ func rw2channel(input chan string, rw *bufio.ReadWriter) {
 	}
 }
 
+// close the stream nicely (no return value, since we don't care if it crashed - it is closed either way)
 func (p *Peer) closeStream(stream network.Stream) {
 	if stream == nil {
 		// nil streams cause SIGSEGV errs when they are closed
@@ -599,6 +629,10 @@ func (p *Peer) closeStream(stream network.Stream) {
 	}
 }
 
+// send a string message to a peer identified by peerId (or to all peers)
+// If the given peerid doesn't exist, doesn't reply etc, it is skipped
+// message: the string to send
+// peerid: the peerid of the peer. Or * to broadcast to multiple peers
 func (p *Peer) sendMessageToPeerId(message string, peerId string) {
 	// the functions should:
 	var contactList map[string]*PeerData
