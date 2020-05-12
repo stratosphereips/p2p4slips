@@ -217,9 +217,9 @@ func (p *Peer) listener(stream network.Stream) {
 	remotePeerData.checkAndUpdateActivePeerMultiaddr(remoteMA)
 
 	// Create a buffer stream for non blocking read and write.
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+	reader := bufio.NewReader(stream)
 
-	str, err := rw.ReadString('\n')
+	str, err := reader.ReadString('\n')
 
 	if err != nil {
 		fmt.Println("Error reading from buffer")
@@ -249,11 +249,11 @@ func (p *Peer) listener(stream network.Stream) {
 
 	if commands[0] == "hello" {
 		fmt.Println("[", remotePeer, "] New peer says hello to me")
-		p.handleHello(remotePeerStr, remotePeerData, rw, &commands)
+		p.handleHello(remotePeerStr, remotePeerData, stream, &commands)
 		return
 	} else if str == "ping" {
 		fmt.Println("[", remotePeer, "] says ping")
-		p.handlePing(remotePeerStr, remotePeerData, rw)
+		p.handlePing(remotePeerStr, remotePeerData, stream)
 		return
 	} else {
 		fmt.Println("[", remotePeer, "] sent an unknown message:", str)
@@ -318,7 +318,7 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo) {
 	p.peerstore.updatePeerVersion(remotePeerStr, remoteVersion)
 }
 
-func (p *Peer) handleHello(remotePeerStr string, remotePeerData *PeerData, rw *bufio.ReadWriter, command *[]string) {
+func (p *Peer) handleHello(remotePeerStr string, remotePeerData *PeerData, stream network.Stream, command *[]string) {
 
 	// parse contents of hello message
 	var remoteVersion string
@@ -343,22 +343,15 @@ func (p *Peer) handleHello(remotePeerStr string, remotePeerData *PeerData, rw *b
 	// say hello
 	fmt.Println("Sending hello reply...")
 
-	_, err := rw.WriteString("hello version1\n")
-	if err != nil {
-		fmt.Println("Error writing to buffer")
-		remotePeerData.addBasicInteraction(0)
-		return
-	}
+	_, ok := p.sendMessageToStream(stream, "hello version1\n", 0)
 
-	err = rw.Flush()
-	if err != nil {
-		fmt.Println("Error flushing buffer")
+	if !ok {
+		fmt.Println("Something went wrong when sending hello reply")
 		remotePeerData.addBasicInteraction(0)
 		return
 	}
 
 	remotePeerData.addBasicInteraction(1)
-	return
 }
 
 func (p *Peer) sendPing(remotePeerData *PeerData) {
@@ -368,19 +361,9 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 		return
 	}
 
-	pingStream := p.openStreamFromPeerData(remotePeerData)
-	defer p.closeStream(pingStream)
-	if pingStream == nil {
-		fmt.Println("Couldn't open stream for ping")
-		remotePeerData.addBasicInteraction(0)
-		return
-	}
-
-	response, ok := p.sendMessageToStream(pingStream, "ping\n", 10)
+	response, ok := p.openAndSend(remotePeerData, "ping\n", 10)
 
 	if !ok {
-		fmt.Println("Reading ping response failed")
-		remotePeerData.addBasicInteraction(0)
 		return
 	}
 
@@ -394,7 +377,7 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 	}
 }
 
-func (p *Peer) handlePing(remotePeerStr string, remotePeerData *PeerData, rw *bufio.ReadWriter) {
+func (p *Peer) handlePing(remotePeerStr string, remotePeerData *PeerData, stream network.Stream) {
 	// did he send hello before pinging?
 	if remotePeerData.Version == "" {
 		fmt.Println("Peer is sending pings before saying hello")
@@ -409,16 +392,9 @@ func (p *Peer) handlePing(remotePeerStr string, remotePeerData *PeerData, rw *bu
 
 	// reply to ping
 	fmt.Println("Sending ping reply...")
-
-	_, err := rw.WriteString("pong\n")
-	if err != nil {
-		fmt.Println("Error writing to buffer")
-		remotePeerData.addBasicInteraction(0)
-		return
-	}
-	err = rw.Flush()
-	if err != nil {
-		fmt.Println("Error flushing buffer")
+	_, ok := p.sendMessageToStream(stream, "pong\n", 0)
+	if !ok {
+		fmt.Println("Something went wrong when sending ping reply")
 		remotePeerData.addBasicInteraction(0)
 		return
 	}
@@ -536,7 +512,7 @@ func (p *Peer) pingLoop() {
 			p.sendPing(peerData)
 		}
 		fmt.Println("[LOOP] done, sleeping 10s")
-		time.Sleep(25 * time.Second)
+		time.Sleep(10 * time.Second)
 	}
 	// sleep
 	// for each active peer
@@ -599,6 +575,10 @@ func (p *Peer) sendMessageToStream(stream network.Stream, msg string, timeout ti
 		return "", false
 	}
 
+	if timeout == 0 {
+		return "", true
+	}
+
 	output := make(chan string)
 
 	go rw2channel(output, rw)
@@ -613,28 +593,22 @@ func (p *Peer) sendMessageToStream(stream network.Stream, msg string, timeout ti
 	return data, true
 }
 
-func (p *Peer) sendMessage(stream network.Stream, msg string){
-
-	// open rw
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-	fmt.Printf("Sending message: '%s'\n", msg)
-	if !send2rw(rw, msg) {
-		fmt.Println("error sending")
-		// p.peerstore.decreaseGoodCount(remotePeerStr)
-	}
-}
-
-func (p *Peer) openAndSend(peerData *PeerData, message string) {
+func (p *Peer) openAndSend(peerData *PeerData, message string, timeout time.Duration) (string, bool){
 	stream := p.openStreamFromPeerData(peerData)
 	defer p.closeStream(stream)
 	if stream == nil {
 		fmt.Println("Couldn't open stream for ping")
 		peerData.addBasicInteraction(0)
-		return
+		return "", false
 	}
 
-	p.sendMessage(stream, message)
+	response, ok := p.sendMessageToStream(stream, message, timeout)
+
+	if !ok {
+		peerData.addBasicInteraction(0)
+	}
+
+	return response, ok
 }
 
 func (p *Peer) sendMessageToPeer(message string, peerId string) {
@@ -661,7 +635,7 @@ func (p *Peer) sendMessageToPeer(message string, peerId string) {
 	for peerID := range contactList {
 		peerData := contactList[peerID]
 
-		go p.openAndSend(peerData, message)
+		go p.openAndSend(peerData, message, 0)
 	}
 
 	return
