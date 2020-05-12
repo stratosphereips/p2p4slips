@@ -12,7 +12,7 @@ func runTests(dbAddress string){
 		DB:       0,  // use default DB
 	})
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(3 * time.Second)
 	var data string
 
 	//data = "{\"message\": \"ewogICAgImtleV90eXBlIjogImlwIiwKICAgICJrZXkiOiAiMS4yLjMuNDAiLAogICAgImV........jYKfQ==\"" +

@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v7"
 	"github.com/libp2p/go-libp2p"
@@ -34,6 +35,12 @@ type Peer struct {
 	keyFile       string
 	resetKey      bool
 	peerstoreFile string
+}
+
+type Report struct {
+	Reporter  string `json:"reporter"`
+	ReportTme int64  `json:"report_time"`
+	Message   string `json:"message"`
 }
 
 func (p *Peer) peerInit() error {
@@ -248,18 +255,15 @@ func (p *Peer) listener(stream network.Stream) {
 		fmt.Println("[", remotePeer, "] New peer says hello to me")
 		p.handleHello(remotePeerStr, remotePeerData, rw, &commands)
 		return
-	}
-
-	if str == "ping" {
+	} else if str == "ping" {
 		fmt.Println("[", remotePeer, "] says ping")
 		p.handlePing(remotePeerStr, remotePeerData, rw)
 		return
+	} else {
+		fmt.Println("[", remotePeer, "] sent an unknown message:", str)
+		p.handleGenericMessage(remotePeerStr, str)
 	}
 
-	// Green console colour: 	\x1b[32m
-	// Reset console colour: 	\x1b[0m
-	fmt.Println("[", remotePeer, "] sent an unknown message:", str)
-	remotePeerData.addBasicInteraction(0)
 }
 
 func (p *Peer) sayHello(peerAddress peer.AddrInfo) {
@@ -426,6 +430,24 @@ func (p *Peer) handlePing(remotePeerStr string, remotePeerData *PeerData, rw *bu
 	remotePeerData.addBasicInteraction(1)
 }
 
+func (p *Peer) handleGenericMessage(peerID string, message string) {
+	report := Report{
+		Reporter:  peerID,
+		ReportTme: time.Now().Unix(),
+		Message:   message,
+	}
+
+	reportString, err := json.Marshal(report)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// TODO: add channel name to parameters
+	p.rdb.Publish("p2p_gopy", reportString)
+}
+
 func (p *Peer) GetActivePeers() *map[string]*Reputation {
 	data := p.rdb.HGetAll(p.activePeers)
 	reputations := make(map[string]*Reputation)
@@ -499,39 +521,6 @@ func send2rw(rw *bufio.ReadWriter, message string) bool {
 	}
 
 	return true
-}
-
-// public functions follow
-
-func (p *Peer) Blame(ipAddress string) {
-	b := p.IsPeerIP(ipAddress)
-
-	if b == nil {
-		fmt.Printf("[PEER ] Can't blame '%s' - not a peer", ipAddress)
-		return
-	}
-
-	// TODO: implement
-	fmt.Printf("[PEER ] Can't blame '%s' - not implemented yet", ipAddress)
-	return
-}
-
-func (p *Peer) Send(data string) {
-	// for now, use the entire active list
-	// TODO: choose 50 peers
-	// TODO: consider broadcasting
-	peerList := p.GetActivePeers()
-	fmt.Println(peerList)
-}
-
-func (p *Peer) SendAndWait(data string, timeout int) string {
-	// for now, use the entire active list
-	// TODO: choose 50 peers
-	//// TODO: consider broadcasting
-	//peerList := p.GetActivePeers()
-	//
-	//peerstore.AddrBook()
-	return ""
 }
 
 func (p *Peer) close() {
@@ -660,6 +649,8 @@ func (p *Peer) sendMessageToPeer(message string, peerId string) {
 	// handle * as recipient
 	if peerId == "*" {
 		contactList = p.peerstore.activePeers
+		// TODO: choose 50 peers
+		// TODO: consider broadcasting
 	} else {
 		contactList = make(map[string]*PeerData)
 		peerData := p.peerstore.isActivePeer(peerId)
