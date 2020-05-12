@@ -78,7 +78,7 @@ func (s *SListener) handleCommand(message string) {
 	fmt.Println("[SLISTENER] Message data sent from Slips", ps)
 
 	// send the message to the peer specified in the scroll
-	s.peer.sendMessageToPeer(ps.Message, ps.Recipient)
+	s.peer.sendMessageToPeerId(ps.Message, ps.Recipient)
 
 	// the responses should be processed by remote peers eventually and should be processed by the peer listening loop
 	// and saved to slips database from there

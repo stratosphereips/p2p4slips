@@ -280,20 +280,7 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo) {
 		return
 	}
 
-	// open a stream, this stream will be handled by handleStream other end
-	fmt.Printf("PROTOCOL: %s\n", p.protocol)
-	fmt.Println("XXX remotepeer:", remotePeer)
-	fmt.Printf("XXX remotepeertype: %T\n", remotePeer)
-	stream, err := p.host.NewStream(p.ctx, remotePeer, protocol.ID(p.protocol))
-	defer p.closeStream(stream)
-
-	if err != nil {
-		fmt.Println("Stream open failed", err)
-		remotePeerData.addBasicInteraction(0)
-		return
-	}
-
-	response, ok := p.sendMessageToStream(stream, "hello version1\n", 10)
+	response, ok := p.sendMessageToPeerData(remotePeerData, "hello version1\n", 10)
 
 	if !ok {
 		fmt.Println("Reading response failed")
@@ -361,7 +348,7 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 		return
 	}
 
-	response, ok := p.openAndSend(remotePeerData, "ping\n", 10)
+	response, ok := p.sendMessageToPeerData(remotePeerData, "ping\n", 10)
 
 	if !ok {
 		return
@@ -464,36 +451,6 @@ func (p *Peer) IsPeerIP(ipAddress string) *Reputation {
 	return nil
 }
 
-func rw2channel(input chan string, rw *bufio.ReadWriter) {
-	for {
-		result, err := rw.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				return
-			}
-			fmt.Println("err on rw2channel:", err)
-		}
-
-		input <- result
-	}
-}
-
-func send2rw(rw *bufio.ReadWriter, message string) bool {
-	_, err := rw.WriteString(message)
-
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-	err = rw.Flush()
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-
-	return true
-}
-
 func (p *Peer) close() {
 	p.peerstore.saveToFile(p.privKey)
 
@@ -520,6 +477,25 @@ func (p *Peer) pingLoop() {
 	// ping
 	// too many failures?
 	// remove peer from actives
+}
+
+
+func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout time.Duration) (string, bool){
+	stream := p.openStreamFromPeerData(peerData)
+	defer p.closeStream(stream)
+	if stream == nil {
+		fmt.Println("Couldn't open stream for ping")
+		peerData.addBasicInteraction(0)
+		return "", false
+	}
+
+	response, ok := p.sendMessageToStream(stream, message, timeout)
+
+	if !ok {
+		peerData.addBasicInteraction(0)
+	}
+
+	return response, ok
 }
 
 func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
@@ -549,18 +525,6 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
 	}
 
 	return stream
-}
-
-func (p *Peer) closeStream(stream network.Stream) {
-	if stream == nil {
-		// nil streams cause SIGSEGV errs when they are closed
-		// fmt.Println("Stream is nil, not closing")
-		return
-	}
-	err := stream.Close()
-	if err != nil {
-		fmt.Println("Error closing stream")
-	}
 }
 
 func (p *Peer) sendMessageToStream(stream network.Stream, msg string, timeout time.Duration) (response string, ok bool) {
@@ -593,25 +557,49 @@ func (p *Peer) sendMessageToStream(stream network.Stream, msg string, timeout ti
 	return data, true
 }
 
-func (p *Peer) openAndSend(peerData *PeerData, message string, timeout time.Duration) (string, bool){
-	stream := p.openStreamFromPeerData(peerData)
-	defer p.closeStream(stream)
-	if stream == nil {
-		fmt.Println("Couldn't open stream for ping")
-		peerData.addBasicInteraction(0)
-		return "", false
+func send2rw(rw *bufio.ReadWriter, message string) bool {
+	_, err := rw.WriteString(message)
+
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	err = rw.Flush()
+	if err != nil {
+		fmt.Println(err)
+		return false
 	}
 
-	response, ok := p.sendMessageToStream(stream, message, timeout)
-
-	if !ok {
-		peerData.addBasicInteraction(0)
-	}
-
-	return response, ok
+	return true
 }
 
-func (p *Peer) sendMessageToPeer(message string, peerId string) {
+func rw2channel(input chan string, rw *bufio.ReadWriter) {
+	for {
+		result, err := rw.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				return
+			}
+			fmt.Println("err on rw2channel:", err)
+		}
+
+		input <- result
+	}
+}
+
+func (p *Peer) closeStream(stream network.Stream) {
+	if stream == nil {
+		// nil streams cause SIGSEGV errs when they are closed
+		// fmt.Println("Stream is nil, not closing")
+		return
+	}
+	err := stream.Close()
+	if err != nil {
+		fmt.Println("Error closing stream")
+	}
+}
+
+func (p *Peer) sendMessageToPeerId(message string, peerId string) {
 	// the functions should:
 	var contactList map[string]*PeerData
 
@@ -635,7 +623,7 @@ func (p *Peer) sendMessageToPeer(message string, peerId string) {
 	for peerID := range contactList {
 		peerData := contactList[peerID]
 
-		go p.openAndSend(peerData, message, 0)
+		go p.sendMessageToPeerData(peerData, message, 0)
 	}
 
 	return
