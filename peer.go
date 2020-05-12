@@ -629,7 +629,7 @@ func (p *Peer) sendMessageToStream(stream network.Stream, msg string, timeout ti
 	return data, true
 }
 
-func (p *Peer) sendMessage(stream network.Stream, msg string, timeout time.Duration, output chan string){
+func (p *Peer) sendMessage(stream network.Stream, msg string){
 
 	// open rw
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
@@ -638,18 +638,10 @@ func (p *Peer) sendMessage(stream network.Stream, msg string, timeout time.Durat
 	if !send2rw(rw, msg) {
 		fmt.Println("error sending")
 		// p.peerstore.decreaseGoodCount(remotePeerStr)
-		return
 	}
-
-	if timeout == 0 {
-		fmt.Println("Zero timeout, not waiting for reply")
-		return
-	}
-
-	go rw2channel(output, rw)
 }
 
-func (p *Peer) openAndSend(peerData *PeerData, message string, timeout time.Duration, output chan string) {
+func (p *Peer) openAndSend(peerData *PeerData, message string) {
 	stream := p.openStreamFromPeerData(peerData)
 	defer p.closeStream(stream)
 	if stream == nil {
@@ -658,10 +650,10 @@ func (p *Peer) openAndSend(peerData *PeerData, message string, timeout time.Dura
 		return
 	}
 
-	p.sendMessage(stream, message, timeout, output)
+	p.sendMessage(stream, message)
 }
 
-func (p *Peer) sendMessageToPeer(message string, peerId string, timeout time.Duration) {
+func (p *Peer) sendMessageToPeer(message string, peerId string) {
 	// the functions should:
 	var contactList map[string]*PeerData
 
@@ -680,30 +672,10 @@ func (p *Peer) sendMessageToPeer(message string, peerId string, timeout time.Dur
 		contactList[peerId] = peerData
 	}
 
-	// send message to peer(s)
-	output := make(chan string, len(contactList))
-
 	for peerID := range contactList {
 		peerData := contactList[peerID]
 
-		go p.openAndSend(peerData, message, timeout, output)
-	}
-
-	if timeout == 0 {
-		fmt.Println("Zero timeout, not waiting for replies")
-		return
-	}
-
-	// wait till remote peer replies
-	var data []string
-	select {
-	case d := <-output:
-		// TODO: update peer reliability
-		// TODO: return messages ready to be sent to slips
-		// return string if any message was received
-		data = append(data, d)
-	case <-time.After(timeout * time.Second):
-		fmt.Println("timeout")
+		go p.openAndSend(peerData, message)
 	}
 
 	return

@@ -7,7 +7,6 @@ import (
 	"github.com/go-redis/redis/v7"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type SListener struct {
@@ -20,7 +19,6 @@ type SListener struct {
 type PigeonScroll struct {
 	Message   string `json:"message"`
 	Recipient string `json:"recipient"`
-	Timeout      int `json:"timeout"`
 }
 
 func (s *SListener) dbInit(){
@@ -73,25 +71,11 @@ func (s *SListener) handleCommand(message string) {
 
 	fmt.Println("[SLISTENER] Message data sent from slips", ps)
 
-	// check if timeout is set (send only, or send and wait)
-	// call respective functions in Peer
-	// TODO: use actual timeout
-	s.peer.sendMessageToPeer(ps.Message, ps.Recipient, 0 * time.Second)
+	// send the message to the peer specified in the scroll
+	s.peer.sendMessageToPeer(ps.Message, ps.Recipient)
 
-	// the functions should:
-	// check if peer is known
-	// handle * as recipient
-
-	// send message to peer
-
-	// wait till remote peer replies
-	// update peer reliability
-	// return string if any message was received
-
-	// this function should then (in case of send and wait)
-	// collect responses and create a response object
-	// send this object to slips in the given report format {reporter, report_time, message}
-
+	// the responses should be processed by remote peers eventually and should be processed by the peer listening loop
+	// and saved to slips database from there
 }
 
 func (s *SListener) parseJson(message string) (*PigeonScroll, error) {
