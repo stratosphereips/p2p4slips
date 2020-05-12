@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-redis/redis/v7"
-	"strconv"
 	"strings"
 )
 
@@ -69,7 +68,7 @@ func (s *SListener) handleCommand(message string) {
 		return
 	}
 
-	fmt.Println("[SLISTENER] Message data sent from slips", ps)
+	fmt.Println("[SLISTENER] Message data sent from Slips", ps)
 
 	// send the message to the peer specified in the scroll
 	s.peer.sendMessageToPeer(ps.Message, ps.Recipient)
@@ -101,31 +100,5 @@ func (s *SListener) parseJson(message string) (*PigeonScroll, error) {
 		ps.Message = ps.Message + "\n"
 	}
 
-	// TODO: make sure that if timeout is missing, it would be zero
-
 	return ps, nil
-}
-
-func (s *SListener) broadcast (data string){
-	s.peer.Send(data)
-}
-
-func (s *SListener) ask (message string){
-	parsedMessage := strings.SplitN(message, " ", 2)
-
-	if len(parsedMessage) != 2 {
-		fmt.Printf("[SLISTENER] Can't ask about data - message must be in the correct format 'ASK timeout data'\n")
-		return
-	}
-
-	timeout, err := strconv.Atoi(parsedMessage[0])
-	if err != nil {
-		fmt.Printf("[SLISTENER] Can't ask about data - '%s' is not a valid timeout in seconds\n", parsedMessage[0])
-		return
-	}
-	data := parsedMessage[1]
-
-	response := s.peer.SendAndWait(data, timeout)
-	fmt.Println(response)
-	// TODO: save response to db
 }
