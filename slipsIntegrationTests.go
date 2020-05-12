@@ -13,10 +13,11 @@ func runTests(dbAddress string){
 	})
 
 	time.Sleep(10 * time.Second)
+	var data string
 
-	data := "{\"message\": \"ewogICAgImtleV90eXBlIjogImlwIiwKICAgICJrZXkiOiAiMS4yLjMuNDAiLAogICAgImV........jYKfQ==\"" +
-		", \"recipient\": \"QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N\"}"
-	rdb.Publish("p2p_pygo", data)
+	//data = "{\"message\": \"ewogICAgImtleV90eXBlIjogImlwIiwKICAgICJrZXkiOiAiMS4yLjMuNDAiLAogICAgImV........jYKfQ==\"" +
+	//	", \"recipient\": \"QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N\"}"
+	//rdb.Publish("p2p_pygo", data)
 
 	// missing recipient
 	data = "{\"message\": \"ewogICAgImtleV90eXBlIjogImlwIiwKICAgICJrZXkiOiAiMS4yLjMuNDAiLAogICAgImV........jYKfQ==\"}"
@@ -28,6 +29,6 @@ func runTests(dbAddress string){
 
 	// additional field
 	data = "{\"message\": \"ewogICAgImtleV90eXBlIjogImlwIiwKICAgICJrZXkiOiAiMS4yLjMuNDAiLAogICAgImV........jYKfQ==\"" +
-		", \"recipient\": \"QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N\", \"foo\": 3}"
+		", \"recipient\": \"Qma1fduRcwaq1m7VhhCSyb96vaofr2873n76urMBxmRzRP\", \"foo\": 3}"
 	rdb.Publish("p2p_pygo", data)
 }

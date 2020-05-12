@@ -7,6 +7,7 @@ import (
 	"github.com/go-redis/redis/v7"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type SListener struct {
@@ -19,6 +20,7 @@ type SListener struct {
 type PigeonScroll struct {
 	Message   string `json:"message"`
 	Recipient string `json:"recipient"`
+	Timeout      int `json:"timeout"`
 }
 
 func (s *SListener) dbInit(){
@@ -73,6 +75,8 @@ func (s *SListener) handleCommand(message string) {
 
 	// check if timeout is set (send only, or send and wait)
 	// call respective functions in Peer
+	// TODO: use actual timeout
+	s.peer.sendMessageToPeer(ps.Message, ps.Recipient, 0 * time.Second)
 
 	// the functions should:
 	// check if peer is known
@@ -107,6 +111,13 @@ func (s *SListener) parseJson(message string) (*PigeonScroll, error) {
 		fmt.Println("[SLISTENER] JSON is missing the Recipient field")
 		return nil, errors.New("recipient field missing")
 	}
+
+	if !strings.HasSuffix(ps.Message, "\n") {
+		fmt.Println("Adding newline at the end of slips message...")
+		ps.Message = ps.Message + "\n"
+	}
+
+	// TODO: make sure that if timeout is missing, it would be zero
 
 	return ps, nil
 }

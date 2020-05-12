@@ -19,20 +19,20 @@ import (
 )
 
 type Peer struct {
-	rdb  *redis.Client
-	activePeers string
-	allPeers string
-	host       host.Host
-	port       int
-	hostname   string
-	protocol   string
-	dbAddress  string
-	rendezVous string
-	ctx        context.Context
-	peerstore  PeerStore
-	privKey    crypto.PrivKey
-	keyFile    string
-	resetKey   bool
+	rdb           *redis.Client
+	activePeers   string
+	allPeers      string
+	host          host.Host
+	port          int
+	hostname      string
+	protocol      string
+	dbAddress     string
+	rendezVous    string
+	ctx           context.Context
+	peerstore     PeerStore
+	privKey       crypto.PrivKey
+	keyFile       string
+	resetKey      bool
 	peerstoreFile string
 }
 
@@ -55,7 +55,7 @@ func (p *Peer) peerInit() error {
 	// TODO:     https://stackoverflow.com/questions/26211954/how-do-i-pass-arguments-to-my-handler
 	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
 
-	p.peerstore = PeerStore{store:p.host.Peerstore(), saveFile: p.peerstoreFile}
+	p.peerstore = PeerStore{store: p.host.Peerstore(), saveFile: p.peerstoreFile}
 	p.peerstore.readFromFile(p.privKey)
 
 	// run peer discovery in the background
@@ -127,34 +127,36 @@ func (p *Peer) discoverPeers() error {
 	if err != nil {
 		return err
 	}
-	go func() {	for {
-		peerAddress := <-peerChan // will block until we discover a peerAddress
-		peerId := peerAddress.ID.Pretty()
-		fmt.Println(">>> Found peerAddress:", peerId)
+	go func() {
+		for {
+			peerAddress := <-peerChan // will block until we discover a peerAddress
+			peerId := peerAddress.ID.Pretty()
+			fmt.Println(">>> Found peerAddress:", peerId)
 
-		var remotePeerData *PeerData
+			var remotePeerData *PeerData
 
-		// active peer
-		if remotePeerData = p.peerstore.isActivePeer(peerId); remotePeerData != nil {
-			fmt.Println("I know him and he is active, skipping")
-			continue
+			// active peer
+			if remotePeerData = p.peerstore.isActivePeer(peerId); remotePeerData != nil {
+				fmt.Println("I know him and he is active, skipping")
+				continue
+			}
+
+			// known but inactive peer
+			if remotePeerData = p.peerstore.isKnown(peerId); remotePeerData != nil {
+				fmt.Println("I know him, but we've met a long time ago, skipping")
+				// add him to the active peers list
+				p.peerstore.activePeers[peerId] = remotePeerData
+				continue
+			}
+
+			// unknown peer
+			fmt.Println("This is a new node, contacting him...")
+			go p.sayHello(peerAddress)
+
+			// sleep, because a new peer might be found twice, and we want to save him before the second message is read
+			time.Sleep(2 * time.Second)
 		}
-
-		// known but inactive peer
-		if remotePeerData = p.peerstore.isKnown(peerId); remotePeerData != nil {
-			fmt.Println("I know him, but we've met a long time ago, skipping")
-			// add him to the active peers list
-			p.peerstore.activePeers[peerId] = remotePeerData
-			continue
-		}
-
-		// unknown peer
-		fmt.Println("This is a new node, contacting him...")
-		go p.sayHello(peerAddress)
-
-		// sleep, because a new peer might be found twice, and we want to save him before the second message is read
-		time.Sleep(2 * time.Second)
-	}}()
+	}()
 	return nil
 }
 
@@ -260,7 +262,7 @@ func (p *Peer) listener(stream network.Stream) {
 	remotePeerData.addBasicInteraction(0)
 }
 
-func (p *Peer) sayHello(peerAddress peer.AddrInfo){
+func (p *Peer) sayHello(peerAddress peer.AddrInfo) {
 	// add a simple record into db
 	remotePeer := peerAddress.ID
 	remotePeerStr := remotePeer.Pretty()
@@ -435,7 +437,6 @@ func (p *Peer) GetActivePeers() *map[string]*Reputation {
 	return &reputations
 }
 
-
 func (p *Peer) GetAllPeers() *map[string]*Reputation {
 
 	data := p.rdb.HGetAll(p.allPeers)
@@ -484,7 +485,7 @@ func rw2channel(input chan string, rw *bufio.ReadWriter) {
 	}
 }
 
-func send2rw (rw *bufio.ReadWriter, message string) bool {
+func send2rw(rw *bufio.ReadWriter, message string) bool {
 	_, err := rw.WriteString(message)
 
 	if err != nil {
@@ -500,7 +501,7 @@ func send2rw (rw *bufio.ReadWriter, message string) bool {
 
 // public functions follow
 
-func (p *Peer) Blame (ipAddress string) {
+func (p *Peer) Blame(ipAddress string) {
 	b := p.IsPeerIP(ipAddress)
 
 	if b == nil {
@@ -513,7 +514,7 @@ func (p *Peer) Blame (ipAddress string) {
 	return
 }
 
-func (p *Peer) Send (data string) {
+func (p *Peer) Send(data string) {
 	// for now, use the entire active list
 	// TODO: choose 50 peers
 	// TODO: consider broadcasting
@@ -521,7 +522,7 @@ func (p *Peer) Send (data string) {
 	fmt.Println(peerList)
 }
 
-func (p *Peer) SendAndWait (data string, timeout int) string {
+func (p *Peer) SendAndWait(data string, timeout int) string {
 	// for now, use the entire active list
 	// TODO: choose 50 peers
 	//// TODO: consider broadcasting
@@ -531,7 +532,7 @@ func (p *Peer) SendAndWait (data string, timeout int) string {
 	return ""
 }
 
-func (p *Peer) close(){
+func (p *Peer) close() {
 	p.peerstore.saveToFile(p.privKey)
 
 	// shut the node down
@@ -559,7 +560,7 @@ func (p *Peer) pingLoop() {
 	// remove peer from actives
 }
 
-func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream{
+func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
 	remoteMA := peerData.LastMultiAddress
 
 	// new multiaddress from string
@@ -616,12 +617,88 @@ func (p *Peer) sendMessageToStream(stream network.Stream, msg string, timeout ti
 
 	go rw2channel(output, rw)
 	data := ""
-	select{
-	case data = <- output:
+	select {
+	case data = <-output:
 		break
 	case <-time.After(timeout * time.Second):
 		fmt.Println("timeout")
 	}
 
 	return data, true
+}
+
+func (p *Peer) sendMessage(stream network.Stream, msg string, timeout time.Duration, output chan string){
+
+	// open rw
+	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+
+	fmt.Printf("Sending message: '%s'\n", msg)
+	if !send2rw(rw, msg) {
+		fmt.Println("error sending")
+		// p.peerstore.decreaseGoodCount(remotePeerStr)
+		return
+	}
+
+	if timeout == 0 {
+		fmt.Println("Zero timeout, not waiting for reply")
+		return
+	}
+
+	go rw2channel(output, rw)
+}
+
+func (p *Peer) sendMessageToPeer(message string, peerId string, timeout time.Duration) {
+	// the functions should:
+	var contactList map[string]*PeerData
+
+	// handle * as recipient
+	if peerId == "*" {
+		contactList = p.peerstore.activePeers
+	} else {
+		contactList = make(map[string]*PeerData)
+		peerData := p.peerstore.isActivePeer(peerId)
+
+		if peerData == nil {
+			fmt.Println("[PEER] peerid doesn't belong to any active peer: ", peerId)
+			return
+		}
+
+		contactList[peerId] = peerData
+	}
+
+	// send message to peer(s)
+	output := make(chan string, len(contactList))
+
+	for peerID := range contactList {
+		peerData := p.peerstore.activePeers[peerID]
+
+		stream := p.openStreamFromPeerData(peerData)
+		defer p.closeStream(stream)
+		if stream == nil {
+			fmt.Println("Couldn't open stream for ping")
+			peerData.addBasicInteraction(0)
+			return
+		}
+
+		go p.sendMessage(stream, message, timeout, output)
+	}
+
+	if timeout == 0 {
+		fmt.Println("Zero timeout, not waiting for replies")
+		return
+	}
+
+	// wait till remote peer replies
+	var data []string
+	select {
+	case d := <-output:
+		// TODO: update peer reliability
+		// TODO: return messages ready to be sent to slips
+		// return string if any message was received
+		data = append(data, d)
+	case <-time.After(timeout * time.Second):
+		fmt.Println("timeout")
+	}
+
+	return
 }
