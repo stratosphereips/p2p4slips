@@ -29,6 +29,6 @@ func runTests(dbAddress string){
 
 	// additional field
 	data = "{\"message\": \"ewogICAgImtleV90eXBlIjogImlwIiwKICAgICJrZXkiOiAiMS4yLjMuNDAiLAogICAgImV........jYKfQ==\"" +
-		", \"recipient\": \"Qma1fduRcwaq1m7VhhCSyb96vaofr2873n76urMBxmRzRP\", \"foo\": 3}"
+		", \"recipient\": \"*\", \"foo\": 3}"
 	rdb.Publish("p2p_pygo", data)
 }

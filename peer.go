@@ -489,10 +489,12 @@ func send2rw(rw *bufio.ReadWriter, message string) bool {
 	_, err := rw.WriteString(message)
 
 	if err != nil {
+		fmt.Println(err)
 		return false
 	}
 	err = rw.Flush()
 	if err != nil {
+		fmt.Println(err)
 		return false
 	}
 
@@ -647,6 +649,18 @@ func (p *Peer) sendMessage(stream network.Stream, msg string, timeout time.Durat
 	go rw2channel(output, rw)
 }
 
+func (p *Peer) openAndSend(peerData *PeerData, message string, timeout time.Duration, output chan string) {
+	stream := p.openStreamFromPeerData(peerData)
+	defer p.closeStream(stream)
+	if stream == nil {
+		fmt.Println("Couldn't open stream for ping")
+		peerData.addBasicInteraction(0)
+		return
+	}
+
+	p.sendMessage(stream, message, timeout, output)
+}
+
 func (p *Peer) sendMessageToPeer(message string, peerId string, timeout time.Duration) {
 	// the functions should:
 	var contactList map[string]*PeerData
@@ -670,17 +684,9 @@ func (p *Peer) sendMessageToPeer(message string, peerId string, timeout time.Dur
 	output := make(chan string, len(contactList))
 
 	for peerID := range contactList {
-		peerData := p.peerstore.activePeers[peerID]
+		peerData := contactList[peerID]
 
-		stream := p.openStreamFromPeerData(peerData)
-		defer p.closeStream(stream)
-		if stream == nil {
-			fmt.Println("Couldn't open stream for ping")
-			peerData.addBasicInteraction(0)
-			return
-		}
-
-		go p.sendMessage(stream, message, timeout, output)
+		go p.openAndSend(peerData, message, timeout, output)
 	}
 
 	if timeout == 0 {
