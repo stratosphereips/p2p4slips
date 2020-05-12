@@ -26,6 +26,7 @@ func (p *PeerDataUpdate) pdu2json() string {
 type DBWrapper struct {
 	dbAddress  string
 	rdb  *redis.Client
+	rdbGoPy    string
 }
 
 func (dw *DBWrapper) initDB(){
@@ -64,5 +65,5 @@ func (dw *DBWrapper) sendStringToChannel(message string){
 	fmt.Println("[MESSAGE TO p2p_gopy]", message)
 	fmt.Println("")
 
-	dw.rdb.Publish("p2p_gopy", message)
+	dw.rdb.Publish(dw.rdbGoPy, message)
 }

@@ -21,6 +21,7 @@ import (
 
 type Peer struct {
 	rdb           *redis.Client
+	rdbGoPy       string
 	activePeers   string
 	allPeers      string
 	host          host.Host
@@ -444,8 +445,7 @@ func (p *Peer) handleGenericMessage(peerID string, message string) {
 		return
 	}
 
-	// TODO: add channel name to parameters
-	p.rdb.Publish("p2p_gopy", reportString)
+	p.rdb.Publish(p.rdbGoPy, reportString)
 }
 
 func (p *Peer) GetActivePeers() *map[string]*Reputation {

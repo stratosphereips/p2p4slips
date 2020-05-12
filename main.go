@@ -44,11 +44,12 @@ func main() {
 		}
 	}
 
-	dbw = &DBWrapper{dbAddress: ""}
+	dbw = &DBWrapper{dbAddress: "", rdbGoPy:cfg.redisChannelGoPy}
 	dbw.initDB()
 
 	peer := Peer{
 		dbAddress:cfg.redisDb,
+		rdbGoPy:cfg.redisChannelGoPy,
 		port:cfg.listenPort,
 		protocol:cfg.ProtocolID,
 		hostname:cfg.listenHost,
@@ -65,10 +66,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	slist := SListener{channelName:cfg.redisChannel, dbAddress:cfg.redisDb, peer:&peer}
+	slist := SListener{channelName:cfg.redisChannelPyGo, dbAddress:cfg.redisDb, peer:&peer}
 	go slist.dbInit()
 
-	go runTests(cfg.redisDb)
+	go runTests(cfg.redisDb, cfg.redisChannelPyGo)
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)

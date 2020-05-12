@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func runTests(dbAddress string){
+func runTests(dbAddress string, pyGoChannel string){
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     dbAddress,
 		Password: "", // no password set
@@ -17,18 +17,18 @@ func runTests(dbAddress string){
 
 	//data = "{\"message\": \"ewogICAgImtleV90eXBlIjogImlwIiwKICAgICJrZXkiOiAiMS4yLjMuNDAiLAogICAgImV........jYKfQ==\"" +
 	//	", \"recipient\": \"QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N\"}"
-	//rdb.Publish("p2p_pygo", data)
+	// rdb.Publish(pyGoChannel, data)
 
 	// missing recipient
 	data = "{\"message\": \"ewogICAgImtleV90eXBlIjogImlwIiwKICAgICJrZXkiOiAiMS4yLjMuNDAiLAogICAgImV........jYKfQ==\"}"
-	rdb.Publish("p2p_pygo", data)
+	rdb.Publish(pyGoChannel, data)
 
 	// missing message
 	data = "{\"recipient\": \"QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N\"}"
-	rdb.Publish("p2p_pygo", data)
+	rdb.Publish(pyGoChannel, data)
 
 	// additional field
 	data = "{\"message\": \"ewogICAgImtleV90eXBlIjogImlwIiwKICAgICJrZXkiOiAiMS4yLjMuNDAiLAogICAgImV........jYKfQ==\"" +
 		", \"recipient\": \"*\", \"foo\": 3}"
-	rdb.Publish("p2p_pygo", data)
+	rdb.Publish(pyGoChannel, data)
 }
