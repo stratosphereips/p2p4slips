@@ -36,11 +36,9 @@ func (pd *PeerData) checkAndUpdateActivePeerMultiaddr(multiAddress string){
 
 func (pd *PeerData) shouldIPingPeer() bool {
 	lastSeen := pd.LastInteraction
-	fmt.Printf("last seen: %s\n", lastSeen)
 
 	if !lastSeen.IsZero() {
 		timeSinceLastSeen := time.Since(lastSeen)
-		fmt.Printf("time since last seen: %s\n", timeSinceLastSeen)
 
 		// TODO: justify the constant
 		if timeSinceLastSeen < 15*time.Second {
@@ -60,8 +58,6 @@ func (pd *PeerData) addBasicInteraction(rating float64) {
 	timestamp := time.Now()
 	pd.BasicInteractions = append(pd.BasicInteractions, rating)
 	pd.BasicInteractionTimes = append(pd.BasicInteractionTimes, timestamp)
-
-	pd.LastInteraction = timestamp
 
 	// TODO: improve reliability computation
 	// TODO: only share updates if there is something new
@@ -83,11 +79,6 @@ func (ps *PeerStore) saveToFile (key crypto.PrivKey) error {
 	}
 
 	// save all data from peerstore to file, encrypted by private key
-
-	// join two peer maps together, overwriting the old data with newer stats:
-	for peerId, peerData := range ps.activePeers {
-		ps.allPeers[peerId] = peerData
-	}
 
 	marshaledPeerData, err := json.Marshal(ps.allPeers)
 	// TODO: catch err
@@ -166,6 +157,10 @@ func (ps *PeerStore) activatePeer(peerId string) (peerData *PeerData, isNew bool
 	dbw.sharePeerDataUpdate(peerData)
 
 	return peerData, true
+}
+
+func (ps *PeerStore) deactivatePeer(peerId string) {
+	delete(ps.activePeers, peerId)
 }
 
 func (ps *PeerStore) createNewPeer(peerId string) *PeerData {
