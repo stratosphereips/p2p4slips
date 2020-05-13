@@ -14,7 +14,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
 	"io"
-	"os"
 	"strings"
 	"time"
 )
@@ -136,68 +135,29 @@ func (p *Peer) discoverPeers() error {
 			peerId := peerAddress.ID.Pretty()
 			fmt.Println(">>> Found peerAddress:", peerId)
 
-			var remotePeerData *PeerData
+			peerData, isNew := p.peerstore.activatePeer(peerId)
 
-			// active peer
-			if remotePeerData = p.peerstore.isActivePeer(peerId); remotePeerData != nil {
-				fmt.Println("I know him and he is active, skipping")
-				continue
+			if isNew {
+				// unknown peer
+				fmt.Println("This is a new node, contacting him...")
+
+				if err := p.host.Connect(p.ctx, peerAddress); err != nil {
+					fmt.Println("Connection failed:", err)
+					peerData.addBasicInteraction(0)
+					return
+				}
+
+				remoteMA := fmt.Sprintf("%s/p2p/%s", peerAddress.Addrs[0], peerId)
+				peerData.checkAndUpdateActivePeerMultiaddr(remoteMA)
+
+				go p.sayHello(peerData)
+
+				// sleep, because a new peer might be found twice, and we want to save him before the second message is read
+				time.Sleep(2 * time.Second)
 			}
-
-			// known but inactive peer
-			if remotePeerData = p.peerstore.isKnown(peerId); remotePeerData != nil {
-				fmt.Println("I know him, but we've met a long time ago, skipping")
-				// add him to the active peers list
-				p.peerstore.activePeers[peerId] = remotePeerData
-				continue
-			}
-
-			// unknown peer
-			fmt.Println("This is a new node, contacting him...")
-			go p.sayHello(peerAddress)
-
-			// sleep, because a new peer might be found twice, and we want to save him before the second message is read
-			time.Sleep(2 * time.Second)
 		}
 	}()
 	return nil
-}
-
-func (p *Peer) setPeerOffline(peerid string) {
-	// check if he is in all
-	// if not, copy him from active
-	// update info in all
-	// delete from active
-}
-
-func (p *Peer) setPeerOnline(peerid string) {
-	// get data from all
-	// copy data to active
-}
-
-func (p *Peer) talker(rw *bufio.ReadWriter) {
-	stdReader := bufio.NewReader(os.Stdin)
-	fmt.Println("I am talking now")
-
-	for {
-		fmt.Print("> ")
-		sendData, err := stdReader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Error reading from stdin")
-			panic(err)
-		}
-
-		_, err = rw.WriteString(fmt.Sprintf("%s\n", sendData))
-		if err != nil {
-			fmt.Println("Error writing to buffer")
-			panic(err)
-		}
-		err = rw.Flush()
-		if err != nil {
-			fmt.Println("Error flushing buffer")
-			panic(err)
-		}
-	}
 }
 
 func (p *Peer) listener(stream network.Stream) {
@@ -207,13 +167,7 @@ func (p *Peer) listener(stream network.Stream) {
 	remotePeerStr := remotePeer.Pretty()
 	remoteMA := fmt.Sprintf("%s/p2p/%s", stream.Conn().RemoteMultiaddr(), remotePeerStr)
 
-	var remotePeerData *PeerData
-	remotePeerData = p.peerstore.isKnownWithUpdate(remotePeerStr)
-	if remotePeerData == nil {
-		// add a simple record into db
-		remotePeerData = &PeerData{PeerID: remotePeerStr}
-		p.peerstore.activePeers[remotePeerStr] = remotePeerData
-	}
+	remotePeerData, _ := p.peerstore.activatePeer(remotePeerStr)
 	remotePeerData.checkAndUpdateActivePeerMultiaddr(remoteMA)
 
 	// Create a buffer stream for non blocking read and write.
@@ -262,25 +216,9 @@ func (p *Peer) listener(stream network.Stream) {
 
 }
 
-func (p *Peer) sayHello(peerAddress peer.AddrInfo) {
-	// add a simple record into db
-	remotePeer := peerAddress.ID
-	remotePeerStr := remotePeer.Pretty()
-	remoteMA := fmt.Sprintf("%s/p2p/%s", peerAddress.Addrs[0], remotePeerStr)
+func (p *Peer) sayHello(peerData *PeerData) {
 
-	var remotePeerData *PeerData
-	// add a simple record into db
-	remotePeerData = &PeerData{PeerID: remotePeerStr}
-	p.peerstore.addNewPeer(remotePeerData)
-	remotePeerData.checkAndUpdateActivePeerMultiaddr(remoteMA)
-
-	if err := p.host.Connect(p.ctx, peerAddress); err != nil {
-		fmt.Println("Connection failed:", err)
-		remotePeerData.addBasicInteraction(0)
-		return
-	}
-
-	response, ok := p.sendMessageToPeerData(remotePeerData, "hello version1\n", 10 * time.Second)
+	response, ok := p.sendMessageToPeerData(peerData, "hello version1\n", 10 * time.Second)
 
 	if !ok {
 		return
@@ -293,15 +231,15 @@ func (p *Peer) sayHello(peerAddress peer.AddrInfo) {
 
 	if len(command) != 2 || command[0] != "hello" {
 		fmt.Println("Peer sent invalid hello reply")
-		remotePeerData.addBasicInteraction(0)
+		peerData.addBasicInteraction(0)
 		return
 	} else {
 		remoteVersion = command[1]
 	}
 
 	fmt.Println("PeerOld response ok, updating reputation")
-	remotePeerData.addBasicInteraction(1)
-	p.peerstore.updatePeerVersion(remotePeerStr, remoteVersion)
+	peerData.addBasicInteraction(1)
+	p.peerstore.updatePeerVersion(peerData.PeerID, remoteVersion)
 }
 
 func (p *Peer) handleHello(remotePeerStr string, remotePeerData *PeerData, stream network.Stream, command *[]string) {

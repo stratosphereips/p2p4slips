@@ -15,10 +15,12 @@ type PeerData struct {
 	LastUsedIP            string
 	Version               string
 	Reliability           float64
-	LastGoodInteraction   time.Time
+	LastInteraction       time.Time
 	LastMultiAddress      string
 	BasicInteractions     []float64
 	BasicInteractionTimes []time.Time
+	// TODO: move all manipulation to getters and setters, which notify slips
+
 }
 
 func (pd *PeerData) checkAndUpdateActivePeerMultiaddr(multiAddress string){
@@ -33,7 +35,7 @@ func (pd *PeerData) checkAndUpdateActivePeerMultiaddr(multiAddress string){
 }
 
 func (pd *PeerData) shouldIPingPeer() bool {
-	lastSeen := pd.LastGoodInteraction
+	lastSeen := pd.LastInteraction
 	fmt.Printf("last seen: %s\n", lastSeen)
 
 	if !lastSeen.IsZero() {
@@ -59,9 +61,7 @@ func (pd *PeerData) addBasicInteraction(rating float64) {
 	pd.BasicInteractions = append(pd.BasicInteractions, rating)
 	pd.BasicInteractionTimes = append(pd.BasicInteractionTimes, timestamp)
 
-	if rating > 0.5 {
-		pd.LastGoodInteraction = timestamp
-	}
+	pd.LastInteraction = timestamp
 
 	// TODO: improve reliability computation
 	// TODO: only share updates if there is something new
@@ -141,6 +141,41 @@ func (ps *PeerStore) readFromFile (privateKey crypto.PrivKey) {
 	fmt.Println("[PEERSTORE] --- END OF PEERSTORE DATA ---")
 }
 
+func (ps *PeerStore) activatePeer(peerId string) (peerData *PeerData, isNew bool) {
+
+	// check if he is active already
+	peerData, ok := ps.activePeers[peerId]
+	if ok {
+		peerData.LastInteraction = time.Now()
+		dbw.sharePeerDataUpdate(peerData)
+		return peerData, false
+	}
+
+	// check if he was contacted ever before
+	peerData, ok = ps.allPeers[peerId]
+	if ok {
+		// if yes, update his info and move him to active peer list
+		peerData.LastInteraction = time.Now()
+		dbw.sharePeerDataUpdate(peerData)
+		ps.activePeers[peerId] = peerData
+		return peerData, false
+	}
+
+	// the peer is completely new, he should be created...
+	peerData = ps.createNewPeer(peerId)
+	dbw.sharePeerDataUpdate(peerData)
+
+	return peerData, true
+}
+
+func (ps *PeerStore) createNewPeer(peerId string) *PeerData {
+
+	peerData := &PeerData{PeerID: peerId, LastInteraction: time.Now()}
+	ps.activePeers[peerId] = peerData
+	ps.allPeers[peerId] = peerData
+
+	return peerData
+}
 
 func (ps *PeerStore) isActivePeer(peerId string) *PeerData {
 	peerData, ok := ps.activePeers[peerId]
@@ -162,29 +197,6 @@ func (ps *PeerStore) isKnown(peerId string) *PeerData {
 	return nil
 }
 
-func (ps *PeerStore) isKnownWithUpdate(peerId string) *PeerData {
-	peerData, ok := ps.activePeers[peerId]
-	if ok {
-		return peerData
-	}
-	peerData, ok = ps.allPeers[peerId]
-	if ok {
-		ps.activePeers[peerId] = peerData
-		return peerData
-	}
-	return nil
-}
-
-func (ps *PeerStore) addNewPeer(data *PeerData){
-	ps.activePeers[data.PeerID] = data
-	dbw.sharePeerDataUpdate(data)
-}
-
-func (ps *PeerStore) updatePeerIP(peerId string, value string){
-	ps.activePeers[peerId].LastUsedIP = value
-	dbw.sharePeerDataUpdate(ps.activePeers[peerId])
-}
-
 func (ps *PeerStore) updatePeerVersion(peerId string, value string){
 	ps.activePeers[peerId].Version = value
 	dbw.sharePeerDataUpdate(ps.activePeers[peerId])
@@ -197,61 +209,3 @@ func average(xs []float64) float64 {
 	}
 	return total / float64(len(xs))
 }
-
-//func (ps *PeerStore) updatePeerIP(peerId peer.ID, value string){
-//	data := ps.getPeerData(peerId)
-//	data.LastUsedIP = value
-//	ps.updatePeerData(data)
-//}
-//
-//func (ps *PeerStore) updatePeerVersion(peerId peer.ID, value string){
-//	data := ps.getPeerData(peerId)
-//	data.Version = value
-//	ps.updatePeerData(data)
-//}
-//
-//func (ps *PeerStore) increaseGoodCount(peerId peer.ID) {
-//	data := ps.getPeerData(peerId)
-//	data.GoodCount = data.GoodCount + 1
-//	ps.updatePeerData(data)
-//}
-//
-//func (ps *PeerStore) decreaseGoodCount(peerId peer.ID) {
-//	data := ps.getPeerData(peerId)
-//	data.GoodCount = data.GoodCount - 1
-//	ps.updatePeerData(data)
-//}
-//
-//func (ps *PeerStore) updatePeerData(data *PeerData) {
-//	peerId := data.PeerID
-//	err := ps.store.Put(peerId, "PeerData", data)
-//	if err != nil {
-//		fmt.Printf("[PEERSTORE] Error updating data for peer %s, error %s\n", peerId, err)
-//	}
-//}
-//
-//func (ps *PeerStore) getPeerData(id peer.ID) *PeerData {
-//	data, err := ps.store.Get(id, "PeerData")
-//	if err != nil {
-//		fmt.Printf("[PEERSTORE] Loading peer data failed for peer %s, error %s\n", id, err)
-//		return &PeerData{PeerID:id}
-//	}
-//
-//	peerData, ok := data.(*PeerData)
-//
-//	if !ok {
-//		fmt.Println("Parsing did not go ok")
-//	}
-//
-//	fmt.Println("[PEERSTORE] Peer data", peerData)
-//
-//	return peerData
-//}
-//
-//func (ps *PeerStore) getAllPeers() map[string]*PeerData {
-//	allPeers := make(map[string]*PeerData)
-//	for _, peerId := range ps.store.Peers() {
-//		allPeers[peerId.Pretty()] = ps.getPeerData(peerId)
-//	}
-//	return allPeers
-//}

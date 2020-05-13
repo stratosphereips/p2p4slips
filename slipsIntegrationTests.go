@@ -20,7 +20,7 @@ func runTests(dbAddress string, pyGoChannel string){
 		return
 	}
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(300000 * time.Second)
 	var data string
 
 	//data = "{\"message\": \"ewogICAgImtleV90eXBlIjogImlwIiwKICAgICJrZXkiOiAiMS4yLjMuNDAiLAogICAgImV........jYKfQ==\"" +
