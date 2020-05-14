@@ -29,8 +29,11 @@ func (pd *PeerData) checkAndUpdateActivePeerMultiaddr(multiAddress string){
 		// if addresses are different
 		pd.LastMultiAddress = multiAddress
 		remoteIP := strings.Split(multiAddress, "/")[2]
-		fmt.Println("new ip", remoteIP)
-		pd.LastUsedIP = remoteIP
+		fmt.Println("IP address changed", remoteIP)
+		if pd.LastUsedIP != remoteIP {
+			pd.LastUsedIP = remoteIP
+			dbw.sharePeerDataUpdate(pd)
+		}
 	}
 }
 

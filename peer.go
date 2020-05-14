@@ -214,6 +214,7 @@ func (p *Peer) listener(stream network.Stream) {
 		p.handleGenericMessage(remotePeerStr, str)
 	}
 
+	// TODO: add a goodbye command, that inactivates the peer without the timeout, thus keeping the reputation.
 }
 
 func (p *Peer) sayHello(peerData *PeerData) {
@@ -350,51 +351,6 @@ func (p *Peer) handleGenericMessage(peerID string, message string) {
 	p.rdb.Publish(p.rdbGoPy, reportString)
 }
 
-func (p *Peer) GetActivePeers() *map[string]*Reputation {
-	data := p.rdb.HGetAll(p.activePeers)
-	reputations := make(map[string]*Reputation)
-
-	for peerId, jsonData := range data.Val() {
-		reputations[peerId] = Json2rep(jsonData)
-	}
-
-	return &reputations
-}
-
-func (p *Peer) GetAllPeers() *map[string]*Reputation {
-
-	data := p.rdb.HGetAll(p.allPeers)
-	reputations := make(map[string]*Reputation)
-
-	for peerId, jsonData := range data.Val() {
-		reputations[peerId] = Json2rep(jsonData)
-	}
-
-	return &reputations
-}
-
-func (p *Peer) IsActivePeerIP(ipAddress string) *Reputation {
-	peers := p.GetActivePeers()
-
-	for _, rep := range *peers {
-		if (*rep).Ip == ipAddress {
-			return rep
-		}
-	}
-	return nil
-}
-
-func (p *Peer) IsPeerIP(ipAddress string) *Reputation {
-	peers := p.GetAllPeers()
-
-	for _, p := range *peers {
-		if p.Ip == ipAddress {
-			return p
-		}
-	}
-	return nil
-}
-
 func (p *Peer) close() {
 	p.peerstore.saveToFile(p.privKey)
 
@@ -469,23 +425,21 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
 	// new multiaddress from string
 	multiaddress, err := multiaddr.NewMultiaddr(remoteMA)
 	if err != nil {
-		fmt.Printf("Error parsing multiaddress '%s': %s\n", remoteMA, err)
+		fmt.Printf("[OPEN STREAM] Error parsing multiaddress '%s': %s\n", remoteMA, err)
 		return nil
 	}
 
 	// addrInfo from multiaddress
 	remotePeer, err := peer.AddrInfoFromP2pAddr(multiaddress)
 	if err != nil {
-		fmt.Println("Error creating addrInfo from multiaddress:", err)
+		fmt.Println("[OPEN STREAM] Error creating addrInfo from multiaddress:", err)
 		return nil
 	}
 
 	// open stream
-	fmt.Println("YYY remotepeer:", remotePeer.ID)
-	fmt.Printf("YYY remotepeertype: %T\n", remotePeer.ID)
 	stream, err := p.host.NewStream(p.ctx, remotePeer.ID, protocol.ID(p.protocol))
 	if err != nil {
-		fmt.Println("Error opening stream:", err)
+		fmt.Println("[OPEN STREAM] Opening stream failed")
 		return nil
 	}
 
@@ -504,7 +458,7 @@ func (p *Peer) sendMessageToStream(stream network.Stream, message string, timeou
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 
 	// send message
-	fmt.Printf("Sending message: '%s'\n", message)
+	// fmt.Printf("Sending message: '%s'\n", message)
 	if !send2rw(rw, message) {
 		fmt.Println("error sending")
 		return "", false

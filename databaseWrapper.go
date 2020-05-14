@@ -61,9 +61,7 @@ func (dw *DBWrapper) sharePeerDataUpdate(data *PeerData){
 
 func (dw *DBWrapper) sendStringToChannel(message string){
 
-	fmt.Println("")
 	fmt.Println("[MESSAGE TO p2p_gopy]", message)
-	fmt.Println("")
 
 	dw.rdb.Publish(dw.rdbGoPy, message)
 }

@@ -14,6 +14,9 @@ func main() {
 	help := flag.Bool("help", false, "Display Help")
 	cfg := parseFlags()
 
+	cfg.redisChannelGoPy = fmt.Sprintf("%s%d", cfg.redisChannelGoPy, cfg.listenPort)
+	cfg.redisChannelPyGo = fmt.Sprintf("%s%d", cfg.redisChannelPyGo, cfg.listenPort)
+
 	if *help {
 		fmt.Println("This is the P2P component of the Stratosphere Linux IPS.")
 		fmt.Println("Run './p2p-experiments' to start it.")
