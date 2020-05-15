@@ -277,7 +277,7 @@ func (p *Peer) handleHello(remotePeerStr string, remotePeerData *PeerData, strea
 }
 
 func (p *Peer) sendPing(remotePeerData *PeerData) {
-	fmt.Println("[PEER PING] time since last interaction: ", time.Since(remotePeerData.LastInteraction))
+	fmt.Println("[PEER PING]")
 
 	// check last ping time, if it was recently, do not ping at all
 	if !remotePeerData.shouldIPingPeer() {
@@ -285,24 +285,17 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 		return
 	}
 
+	fmt.Println("[PEER PING] Sending ping at", time.Now())
 	response, ok := p.sendMessageToPeerData(remotePeerData, "ping\n", 10 * time.Second)
 
-	if !ok {
-		if time.Since(remotePeerData.LastInteraction) > 30 * time.Second {
-			fmt.Println("[PEER PING] It's been to long since the peer has been online, deactivating him")
-			p.peerstore.deactivatePeer(remotePeerData.PeerID)
-		}
-		return
-	}
-
-	if response == "pong\n" {
+	if response == "pong\n" && ok {
 		remotePeerData.addBasicInteraction(1)
-		p.peerstore.activatePeer(remotePeerData.PeerID)
+		remotePeerData.LastGoodPing = time.Now()
 		fmt.Println("[PEER PING] Peer reply ok")
 	} else {
-		fmt.Println("[PEER PING] Peer sent wrong pong reply")
+		fmt.Println("[PEER PING] Peer sent wrong pong reply (or none at all)")
 		remotePeerData.addBasicInteraction(0)
-		if time.Since(remotePeerData.LastInteraction) > 30 * time.Second {
+		if remotePeerData.shouldIDeactivatePeer() {
 			fmt.Println("[PEER PING] It's been to long since the peer has been online, deactivating him")
 			p.peerstore.deactivatePeer(remotePeerData.PeerID)
 		}
@@ -310,16 +303,13 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 }
 
 func (p *Peer) handlePing(remotePeerStr string, remotePeerData *PeerData, stream network.Stream) {
-	// did he send hello before pinging?
-	if remotePeerData.Version == "" {
-		fmt.Println("[PEER PING REPLY] Peer is sending pings before saying hello")
-		remotePeerData.addBasicInteraction(0)
-	}
+	fmt.Println("[PEER PING] Received ping at ", time.Now())
+	rating := 1.0
 
 	// is he not pinging me too early?
-	if !remotePeerData.shouldIPingPeer() {
+	if !remotePeerData.canHePingMe() {
 		fmt.Println("[PEER PING REPLY] Peer is sending pings too often")
-		remotePeerData.addBasicInteraction(0)
+		rating = 0
 	}
 
 	// reply to ping
@@ -327,11 +317,12 @@ func (p *Peer) handlePing(remotePeerStr string, remotePeerData *PeerData, stream
 	_, ok := p.sendMessageToStream(stream, "pong\n", 0)
 	if !ok {
 		fmt.Println("[PEER PING REPLY] Something went wrong when sending ping reply")
-		remotePeerData.addBasicInteraction(0)
-		return
+		rating = 0
+	} else {
+		remotePeerData.LastGoodPing = time.Now()
 	}
 
-	remotePeerData.addBasicInteraction(1)
+	remotePeerData.addBasicInteraction(rating)
 }
 
 func (p *Peer) handleGenericMessage(peerID string, message string) {
