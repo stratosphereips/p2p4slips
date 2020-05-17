@@ -5,17 +5,17 @@ import (
 )
 
 type config struct {
-	RendezvousString  string
-	ProtocolID        string
-	keyFile           string
-	peerstoreFile     string
-	addPortToFilename bool
-	listenHost        string
-	listenPort        int
-	resetKeys         bool
-	redisDb           string
-	redisChannelPyGo  string
-	redisChannelGoPy  string
+	RendezvousString string
+	ProtocolID       string
+	keyFile          string
+	peerstoreFile    string
+	renameWithPort   bool
+	listenHost       string
+	listenPort       int
+	resetKeys        bool
+	redisDb          string
+	redisChannelPyGo string
+	redisChannelGoPy string
 }
 
 func parseFlags() *config {
@@ -36,8 +36,8 @@ func parseFlags() *config {
 		" provided, peers will be loaded from the file and saved to it for later use. If no file is specified, or if " +
 		"the file cannot be decrypted with the given private key, empty peerstore will be created")
 
-	flag.BoolVar(&c.addPortToFilename, "add-port-to-filename", true, "Port is appended to " +
-		"filenames for convenient running of more peers on one host. Set to true to keep filenames unchanged")
+	flag.BoolVar(&c.renameWithPort, "rename-with-port", true, "Port is appended to filenames and " +
+		"channels for convenient running of more peers on one host. Set to false to keep filenames unchanged")
 
 	flag.StringVar(&c.redisDb, "redis-db", "localhost:6379", "Remote redis database")
 	flag.StringVar(&c.redisChannelPyGo, "redis-channel-pygo", "p2p_pygo", "Channel for listening to commands")

@@ -14,8 +14,6 @@ func main() {
 	help := flag.Bool("help", false, "Display Help")
 	cfg := parseFlags()
 
-	cfg.redisChannelGoPy = fmt.Sprintf("%s%d", cfg.redisChannelGoPy, cfg.listenPort)
-	cfg.redisChannelPyGo = fmt.Sprintf("%s%d", cfg.redisChannelPyGo, cfg.listenPort)
 
 	if *help {
 		fmt.Println("This is the P2P component of the Stratosphere Linux IPS.")
@@ -38,13 +36,15 @@ func main() {
 
 	keyFile := cfg.keyFile
 	peerstoreFile := cfg.peerstoreFile
-	if cfg.addPortToFilename {
+	if cfg.renameWithPort {
 		if keyFile != "" {
 			keyFile = fmt.Sprintf("%s%d", keyFile, cfg.listenPort)
 		}
 		if peerstoreFile != "" {
 			peerstoreFile = fmt.Sprintf("%s%d", peerstoreFile, cfg.listenPort)
 		}
+		cfg.redisChannelGoPy = fmt.Sprintf("%s%d", cfg.redisChannelGoPy, cfg.listenPort)
+		cfg.redisChannelPyGo = fmt.Sprintf("%s%d", cfg.redisChannelPyGo, cfg.listenPort)
 	}
 
 	dbw = &DBWrapper{dbAddress: "", rdbGoPy:cfg.redisChannelGoPy}
