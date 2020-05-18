@@ -143,6 +143,7 @@ func (p *Peer) discoverPeers() error {
 
 				if err := p.host.Connect(p.ctx, peerAddress); err != nil {
 					fmt.Println("Connection failed:", err)
+					fmt.Println("Please make sure that the port of this Node is not used by other processes")
 					peerData.addBasicInteraction(0)
 					return
 				}
