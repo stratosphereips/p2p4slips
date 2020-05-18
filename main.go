@@ -3,8 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 )
 
@@ -33,6 +35,17 @@ func main() {
 	}
 
 	fmt.Println("hostname:", name)
+
+	portStr := strconv.Itoa(cfg.listenPort)
+	ln, err := net.Listen("tcp", ":" + portStr)
+
+	if err != nil {
+		panicMsg := fmt.Sprintf("can't listen on port %q: %s",portStr, err)
+		panic(panicMsg)
+	}
+
+	_ = ln.Close()
+	fmt.Printf("[MAIN] Pigeon is starting on TCP Port %q\n", portStr)
 
 	keyFile := cfg.keyFile
 	peerstoreFile := cfg.peerstoreFile
