@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v7"
+	"time"
 )
 
 type PeerDataUpdate struct {
 	PeerID       string    `json:"peerid"`
 	Ip           string    `json:"ip"`
 	Reliability  float64   `json:"reliability,omitempty"`
+	Timestamp    int64     `json:"timestamp"`
 	// `json...` makes the properties to parse correctly when using json.Marshal
 }
 
@@ -52,6 +54,7 @@ func (dw *DBWrapper) sharePeerDataUpdate(data *PeerData){
 		PeerID:      peerID,
 		Ip:          ip,
 		Reliability: reliability,
+		Timestamp:   time.Now().Unix(),
 	}
 
 	strJson := pdu.pdu2json()
