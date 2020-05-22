@@ -25,7 +25,10 @@ func (ps *PeerStore) saveToFile (key crypto.PrivKey) error {
 	// save all data from peerstore to file, encrypted by private key
 
 	marshaledPeerData, err := json.Marshal(ps.allPeers)
-	// TODO: catch err
+	if err != nil {
+		fmt.Println("[PEERSTORE] PeerStore saving failed:", err)
+		return err
+	}
 
 	// TODO: implement signing/encryption
 	//r := rand.Reader
@@ -34,8 +37,6 @@ func (ps *PeerStore) saveToFile (key crypto.PrivKey) error {
 
 	err = ioutil.WriteFile(ps.saveFile, encryptedData, 0600)
 	if err != nil {
-		// TODO: there is no error happening here, but data is not really associated with peers. It can not be found
-		//  later when the peer reconnects
 		fmt.Println("[PEERSTORE] PeerStore saving failed:", err)
 		return err
 	}
