@@ -45,6 +45,24 @@ type Report struct {
 	Message   string `json:"message"`
 }
 
+func NewPeer(cfg *config) *Peer {
+	p := &Peer{
+		rdbGoPy:       cfg.redisChannelGoPy,
+		port:          cfg.listenPort,
+		protocol:      cfg.ProtocolID,
+		dbAddress:     cfg.redisDb,
+		redisDelete:   cfg.redisDelete,
+		rendezVous:    cfg.RendezvousString,
+		peerstore:     PeerStore{},
+		privKey:       nil,
+		keyFile:       cfg.keyFile,
+		resetKey:      cfg.resetKeys,
+		peerstoreFile: cfg.peerstoreFile,
+		closing:       false,
+	}
+	return p
+}
+
 func (p *Peer) peerInit() error {
 	err := p.redisInit()
 	if err != nil {
