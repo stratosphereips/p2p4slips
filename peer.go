@@ -226,8 +226,6 @@ func (p *Peer) listener(stream network.Stream) {
 		fmt.Println("[", remotePeer, "] sent an unknown message:", str)
 		p.handleGenericMessage(remotePeerStr, str)
 	}
-
-	// TODO: add a goodbye command, that inactivates the peer without the timeout, thus keeping the reputation.
 }
 
 func (p *Peer) sayHello(peerData *PeerData) {
