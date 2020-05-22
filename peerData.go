@@ -115,8 +115,10 @@ func (pd *PeerData) addBasicInteraction(rating float64) {
 	pd.BasicInteractions = append(pd.BasicInteractions, rating)
 	pd.BasicInteractionTimes = append(pd.BasicInteractionTimes, timestamp)
 
-	// TODO: improve reliability computation
-	// TODO: only share updates if there is something new
-	pd.Reliability = average(pd.BasicInteractions)
+	reliability := ComputeReliability(pd.BasicInteractions)
+	if reliability == pd.Reliability {
+		return
+	}
+	pd.Reliability = reliability
 	dbw.sharePeerDataUpdate(pd)
 }
