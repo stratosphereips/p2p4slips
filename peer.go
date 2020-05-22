@@ -36,6 +36,7 @@ type Peer struct {
 	keyFile       string
 	resetKey      bool
 	peerstoreFile string
+	closing       bool
 }
 
 type Report struct {
@@ -135,6 +136,9 @@ func (p *Peer) discoverPeers() error {
 	}
 	go func() {
 		for {
+			if p.closing {
+				return
+			}
 			peerAddress := <-peerChan // will block until we discover a peerAddress
 			peerId := peerAddress.ID.Pretty()
 			fmt.Println(">>> Found peerAddress:", peerId)
@@ -158,7 +162,7 @@ func (p *Peer) discoverPeers() error {
 				go p.sayHello(peerData)
 
 				// sleep, because a new peer might be found twice, and we want to save him before the second message is read
-				time.Sleep(2 * time.Second)
+				time.Sleep(500 * time.Millisecond)
 			}
 		}
 	}()
@@ -227,6 +231,9 @@ func (p *Peer) listener(stream network.Stream) {
 }
 
 func (p *Peer) sayHello(peerData *PeerData) {
+	if p.closing{
+		return
+	}
 
 	response, ok := p.sendMessageToPeerData(peerData, "hello version1\n", 10 * time.Second)
 
@@ -253,6 +260,9 @@ func (p *Peer) sayHello(peerData *PeerData) {
 }
 
 func (p *Peer) handleHello(remotePeerData *PeerData, stream network.Stream, command *[]string) {
+	if p.closing{
+		return
+	}
 
 	// parse contents of hello message
 	var remoteVersion string
@@ -282,6 +292,9 @@ func (p *Peer) handleHello(remotePeerData *PeerData, stream network.Stream, comm
 }
 
 func (p *Peer) sendPing(remotePeerData *PeerData) {
+	if p.closing{
+		return
+	}
 	fmt.Println("[PEER PING]")
 
 	// check last ping time, if it was recently, do not ping at all
@@ -308,6 +321,9 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 }
 
 func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
+	if p.closing{
+		return
+	}
 	fmt.Println("[PEER PING] Received ping at ", time.Now())
 	rating := 1.0
 
@@ -352,8 +368,15 @@ func (p *Peer) handleGenericMessage(peerID string, message string) {
 }
 
 func (p *Peer) close() {
-	// TODO: this crashes with "can't open stream"
+	// set closing to true, to stop all outgoing communication, wait till everything is sent
+	p.closing = true
+	time.Sleep(1 * time.Second)
+
+	// tell peers that this node is shutting down
 	p.sendMessageToPeerId("goodbye\n", "*")
+	// wait till the message is sent, otherwise the host is closed too early and sending fails
+	time.Sleep(1 * time.Second)
+
 	p.peerstore.saveToFile(p.privKey)
 
 	// shut the node down
@@ -378,12 +401,6 @@ func (p *Peer) pingLoop() {
 		fmt.Println("[LOOP] done, sleeping 10s")
 		time.Sleep(10 * time.Second)
 	}
-	// sleep
-	// for each active peer
-	// should i ping?
-	// ping
-	// too many failures?
-	// remove peer from actives
 }
 
 // Send specified message to the provided peer. Return the peer's reply (string) and success (bool)

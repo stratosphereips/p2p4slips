@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
-	"time"
 )
 
 var dbw *DBWrapper
@@ -96,6 +95,5 @@ func main() {
 	fmt.Printf("\nReceived signal, shutting down...\n")
 
 	peer.close()
-	time.Sleep(20 * time.Second)
 	os.Exit(0)
 }
