@@ -204,11 +204,11 @@ func (p *Peer) listener(stream network.Stream) {
 
 	if commands[0] == "hello" {
 		fmt.Println("[", remotePeer, "] New peer says hello to me")
-		p.handleHello(remotePeerStr, remotePeerData, stream, &commands)
+		p.handleHello(remotePeerData, stream, &commands)
 		return
 	} else if str == "ping" {
 		fmt.Println("[", remotePeer, "] says ping")
-		p.handlePing(remotePeerStr, remotePeerData, stream)
+		p.handlePing(remotePeerData, stream)
 		return
 	} else {
 		fmt.Println("[", remotePeer, "] sent an unknown message:", str)
@@ -244,7 +244,7 @@ func (p *Peer) sayHello(peerData *PeerData) {
 	peerData.SetVersion(remoteVersion)
 }
 
-func (p *Peer) handleHello(remotePeerStr string, remotePeerData *PeerData, stream network.Stream, command *[]string) {
+func (p *Peer) handleHello(remotePeerData *PeerData, stream network.Stream, command *[]string) {
 
 	// parse contents of hello message
 	var remoteVersion string
@@ -299,7 +299,7 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 	}
 }
 
-func (p *Peer) handlePing(remotePeerStr string, remotePeerData *PeerData, stream network.Stream) {
+func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
 	fmt.Println("[PEER PING] Received ping at ", time.Now())
 	rating := 1.0
 
