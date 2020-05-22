@@ -65,6 +65,7 @@ func main() {
 
 	peer := Peer{
 		dbAddress:cfg.redisDb,
+		redisDelete:cfg.redisDelete,
 		rdbGoPy:cfg.redisChannelGoPy,
 		port:cfg.listenPort,
 		protocol:cfg.ProtocolID,

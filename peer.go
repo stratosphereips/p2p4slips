@@ -28,6 +28,7 @@ type Peer struct {
 	hostname      string
 	protocol      string
 	dbAddress     string
+	redisDelete   bool
 	rendezVous    string
 	ctx           context.Context
 	peerstore     PeerStore
@@ -80,17 +81,20 @@ func (p *Peer) redisInit() error {
 		DB:       0,  // use default DB
 	})
 
-	// delete db
-	// TODO: remove for production
-	p.rdb.FlushAll()
-
 	pongErr := p.rdb.Ping().Err()
 
 	if pongErr != nil {
 		fmt.Println("[PEER] Database connection failed -", pongErr)
+		return pongErr
 	}
 
-	return pongErr
+	// delete db
+	if p.redisDelete {
+		fmt.Println("[PEER] Deleting database")
+		p.rdb.FlushAll()
+	}
+
+	return nil
 }
 
 func (p *Peer) p2pInit(keyFile string, keyReset bool) error {

@@ -14,6 +14,7 @@ type config struct {
 	listenPort       int
 	resetKeys        bool
 	redisDb          string
+	redisDelete      bool
 	redisChannelPyGo string
 	redisChannelGoPy string
 }
@@ -40,6 +41,8 @@ func parseFlags() *config {
 		"channels for convenient running of more peers on one host. Set to false to keep filenames unchanged")
 
 	flag.StringVar(&c.redisDb, "redis-db", "localhost:6379", "Remote redis database")
+
+	flag.BoolVar(&c.redisDelete, "redis-delete", false, "Delete database when starting the program")
 	flag.StringVar(&c.redisChannelPyGo, "redis-channel-pygo", "p2p_pygo", "Channel for listening to commands")
 	flag.StringVar(&c.redisChannelGoPy, "redis-channel-gopy", "p2p_gopy", "Channel for sending data to slips")
 
