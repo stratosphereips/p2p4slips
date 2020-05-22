@@ -214,6 +214,10 @@ func (p *Peer) listener(stream network.Stream) {
 		fmt.Println("[", remotePeer, "] says ping")
 		p.handlePing(remotePeerData, stream)
 		return
+	} else if str == "goodbye" {
+		fmt.Println("[", remotePeer, "] says goodbye")
+		p.handleGoodbye(remotePeerData)
+		return
 	} else {
 		fmt.Println("[", remotePeer, "] sent an unknown message:", str)
 		p.handleGenericMessage(remotePeerStr, str)
@@ -326,6 +330,10 @@ func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
 	remotePeerData.addBasicInteraction(rating)
 }
 
+func (p *Peer) handleGoodbye(remotePeerData *PeerData) {
+	p.peerstore.deactivatePeer(remotePeerData.peerID)
+}
+
 func (p *Peer) handleGenericMessage(peerID string, message string) {
 	report := Report{
 		Reporter:  peerID,
@@ -344,6 +352,8 @@ func (p *Peer) handleGenericMessage(peerID string, message string) {
 }
 
 func (p *Peer) close() {
+	// TODO: this crashes with "can't open stream"
+	p.sendMessageToPeerId("goodbye\n", "*")
 	p.peerstore.saveToFile(p.privKey)
 
 	// shut the node down
@@ -384,6 +394,7 @@ func (p *Peer) pingLoop() {
 // return response string: the response sent by the peer. Empty string if timeout is zero or if there were errors
 // return success bool: true if everything went smoothly, false in case of errors (or no reply from peer)
 func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout time.Duration) (string, bool){
+	fmt.Println("sending ", message, " to:", peerData.peerID)
 	// open stream
 	stream := p.openStreamFromPeerData(peerData)
 	// close stream when this function exits (useful to have it here, since there are multiple returns)
