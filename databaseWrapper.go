@@ -10,7 +10,7 @@ import (
 
 type PeerDataUpdate struct {
 	PeerID       string    `json:"peerid"`
-	Ip           string    `json:"ip"`
+	Ip           string    `json:"ip,omitempty"`
 	Reliability  float64   `json:"reliability,omitempty"`
 	Timestamp    int64     `json:"timestamp"`
 	// `json...` makes the properties to parse correctly when using json.Marshal
