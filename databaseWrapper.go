@@ -46,8 +46,8 @@ func (dw *DBWrapper) initDB(){
 }
 
 func (dw *DBWrapper) sharePeerDataUpdate(data *PeerData){
-	peerID := data.PeerID
-	ip := data.LastUsedIP
+	peerID := data.peerID
+	ip := data.lastUsedIP
 	reliability := data.Reliability
 
 	pdu := &PeerDataUpdate{

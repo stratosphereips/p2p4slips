@@ -109,7 +109,7 @@ func (ps *PeerStore) deactivatePeer(peerId string) {
 
 func (ps *PeerStore) createNewPeer(peerId string) *PeerData {
 
-	peerData := &PeerData{PeerID: peerId, LastInteraction: time.Now()}
+	peerData := &PeerData{peerID: peerId, LastInteraction: time.Now()}
 	ps.activePeers[peerId] = peerData
 	ps.allPeers[peerId] = peerData
 
@@ -134,11 +134,6 @@ func (ps *PeerStore) isKnown(peerId string) *PeerData {
 		return peerData
 	}
 	return nil
-}
-
-func (ps *PeerStore) updatePeerVersion(peerId string, value string){
-	ps.activePeers[peerId].Version = value
-	dbw.sharePeerDataUpdate(ps.activePeers[peerId])
 }
 
 func average(xs []float64) float64 {

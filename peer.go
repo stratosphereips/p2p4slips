@@ -149,7 +149,7 @@ func (p *Peer) discoverPeers() error {
 				}
 
 				remoteMA := fmt.Sprintf("%s/p2p/%s", peerAddress.Addrs[0], peerId)
-				peerData.checkAndUpdateActivePeerMultiaddr(remoteMA)
+				peerData.SetMultiaddr(remoteMA)
 
 				go p.sayHello(peerData)
 
@@ -169,7 +169,7 @@ func (p *Peer) listener(stream network.Stream) {
 	remoteMA := fmt.Sprintf("%s/p2p/%s", stream.Conn().RemoteMultiaddr(), remotePeerStr)
 
 	remotePeerData, _ := p.peerstore.activatePeer(remotePeerStr)
-	remotePeerData.checkAndUpdateActivePeerMultiaddr(remoteMA)
+	remotePeerData.SetMultiaddr(remoteMA)
 
 	// Create a buffer stream for non blocking read and write.
 	reader := bufio.NewReader(stream)
@@ -241,7 +241,7 @@ func (p *Peer) sayHello(peerData *PeerData) {
 
 	fmt.Println("PeerOld response ok, updating reputation")
 	peerData.addBasicInteraction(1)
-	p.peerstore.updatePeerVersion(peerData.PeerID, remoteVersion)
+	peerData.SetVersion(remoteVersion)
 }
 
 func (p *Peer) handleHello(remotePeerStr string, remotePeerData *PeerData, stream network.Stream, command *[]string) {
@@ -256,11 +256,7 @@ func (p *Peer) handleHello(remotePeerStr string, remotePeerData *PeerData, strea
 		remoteVersion = (*command)[1]
 	}
 
-	if remotePeerData.Version != remoteVersion {
-		// update this info
-		fmt.Println("updating version info")
-		p.peerstore.updatePeerVersion(remotePeerStr, remoteVersion)
-	} else {
+	if !remotePeerData.SetVersion(remoteVersion) {
 		// hello message should not be sent unless the version changed or the peer is unknown (changes version as well)
 		fmt.Println("Peer sent unsolicited hello")
 		remotePeerData.addBasicInteraction(0)
@@ -298,7 +294,7 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 		remotePeerData.addBasicInteraction(0)
 		if remotePeerData.shouldIDeactivatePeer() {
 			fmt.Println("[PEER PING] It's been to long since the peer has been online, deactivating him")
-			p.peerstore.deactivatePeer(remotePeerData.PeerID)
+			p.peerstore.deactivatePeer(remotePeerData.peerID)
 		}
 	}
 }
@@ -412,7 +408,7 @@ func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout
 // peerData: data of the target peer
 // return stream network.Stream: a stream with the given peer, or nil in case of errors
 func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
-	remoteMA := peerData.LastMultiAddress
+	remoteMA := peerData.lastMultiAddress
 
 	// new multiaddress from string
 	multiaddress, err := multiaddr.NewMultiaddr(remoteMA)

@@ -7,31 +7,41 @@ import (
 )
 
 type PeerData struct {
-	PeerID                string
-	LastUsedIP            string
-	Version               string
+	peerID                string
+	lastUsedIP            string
+	version               string
 	Reliability           float64
 	LastInteraction       time.Time
 	LastGoodPing          time.Time
-	LastMultiAddress      string
+	lastMultiAddress      string
 	BasicInteractions     []float64
 	BasicInteractionTimes []time.Time
 	// TODO: move all manipulation to getters and setters, which notify slips
 
 }
 
-func (pd *PeerData) checkAndUpdateActivePeerMultiaddr(multiAddress string){
-	if multiAddress != pd.LastMultiAddress {
-		fmt.Println("Updating multiaddr")
-		// if addresses are different
-		pd.LastMultiAddress = multiAddress
-		remoteIP := strings.Split(multiAddress, "/")[2]
-		fmt.Println("IP address changed", remoteIP)
-		if pd.LastUsedIP != remoteIP {
-			pd.LastUsedIP = remoteIP
-			dbw.sharePeerDataUpdate(pd)
-		}
+func (pd *PeerData) SetMultiaddr(multiAddress string){
+	if multiAddress == pd.lastMultiAddress {
+		return
 	}
+	fmt.Println("Updating multiaddr")
+	pd.lastMultiAddress = multiAddress
+
+	remoteIP := strings.Split(multiAddress, "/")[2]
+	fmt.Println("IP address changed", remoteIP)
+	if pd.lastUsedIP != remoteIP {
+		pd.lastUsedIP = remoteIP
+		dbw.sharePeerDataUpdate(pd)
+	}
+}
+
+func (pd *PeerData) SetVersion(value string) bool {
+	if value == pd.version {
+		return false
+	}
+	pd.version = value
+	dbw.sharePeerDataUpdate(pd)
+	return true
 }
 
 func (pd *PeerData) shouldIPingPeer() bool {
