@@ -29,6 +29,7 @@ type DBWrapper struct {
 	dbAddress  string
 	rdb  *redis.Client
 	rdbGoPy    string
+	rdbPyGo    string
 }
 
 func (dw *DBWrapper) initDB(){
@@ -74,4 +75,19 @@ func (dw *DBWrapper) sendBytesToChannel(message []byte){
 	fmt.Println("[MESSAGE TO p2p_gopy]", message)
 
 	dw.rdb.Publish(dw.rdbGoPy, message)
+}
+
+func (dw *DBWrapper) subscribeToPyGo(ch <-chan *redis.Message) bool {
+	// taken from https://godoc.org/github.com/go-redis/redis#example-PubSub-Receive
+	pubsub := dbw.rdb.Subscribe(dw.rdbPyGo)
+
+	// Wait for confirmation that subscription is created before publishing anything.
+	_, err := pubsub.Receive()
+	if err != nil {
+		fmt.Printf("[ERROR] Database connection failed - %s\n", err)
+		return false
+	}
+
+	ch = pubsub.Channel()
+	return true
 }

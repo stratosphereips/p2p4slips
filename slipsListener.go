@@ -9,9 +9,6 @@ import (
 )
 
 type SListener struct {
-	dbAddress string
-	channelName string
-	rdb  *redis.Client
 	peer *Peer
 }
 
@@ -22,32 +19,14 @@ type PigeonScroll struct {
 
 func (s *SListener) dbInit() error {
 
-	// connect to the database
-	s.rdb = redis.NewClient(&redis.Options{
-		Addr:     s.dbAddress,
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
-
-	pongErr := s.rdb.Ping().Err()
-
-	if pongErr != nil {
-		fmt.Println("[PEER] Database connection failed -", pongErr)
-		return pongErr
-	}
-
-	// taken from https://godoc.org/github.com/go-redis/redis#example-PubSub-Receive
-	pubsub := s.rdb.Subscribe(s.channelName)
-
-	// Wait for confirmation that subscription is created before publishing anything.
-	_, err := pubsub.Receive()
-	if err != nil {
-		fmt.Printf("[ERROR] Database connection failed - %s\n", err)
-		return err
-	}
-
 	// Go channel which receives messages.
-	ch := pubsub.Channel()
+	ch := make(<-chan *redis.Message)
+	if !dbw.subscribeToPyGo(ch) {
+		fmt.Println("subscribing failed")
+		return errors.New("subscribing to db failed")
+	}
+	fmt.Println("subscribing ok")
+	// TODO: actually not subscribed...
 
 	// TODO: there was a part here that prevented the sample from working alongside SLIPS. I need to look into that.
 	// time.AfterFunc(time.Second, func() {

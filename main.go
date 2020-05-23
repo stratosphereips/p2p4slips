@@ -37,7 +37,7 @@ func main() {
 	fmt.Printf("[MAIN] Pigeon is starting on TCP Port %d\n", cfg.listenPort)
 
 	// initialize database interface
-	dbw = &DBWrapper{dbAddress: "", rdbGoPy: cfg.redisChannelGoPy}
+	dbw = &DBWrapper{dbAddress: "", rdbGoPy: cfg.redisChannelGoPy, rdbPyGo: cfg.redisChannelPyGo}
 	dbw.initDB()
 
 	// initialize peer
@@ -50,7 +50,7 @@ func main() {
 	}
 
 	// initialize the node listening for data from slips
-	slist := SListener{channelName: cfg.redisChannelPyGo, dbAddress: cfg.redisDb, peer: peer}
+	slist := SListener{peer: peer}
 	go slist.dbInit()
 
 	// run tests
