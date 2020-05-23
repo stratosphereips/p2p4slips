@@ -68,3 +68,10 @@ func (dw *DBWrapper) sendStringToChannel(message string){
 
 	dw.rdb.Publish(dw.rdbGoPy, message)
 }
+
+func (dw *DBWrapper) sendBytesToChannel(message []byte){
+
+	fmt.Println("[MESSAGE TO p2p_gopy]", message)
+
+	dw.rdb.Publish(dw.rdbGoPy, message)
+}

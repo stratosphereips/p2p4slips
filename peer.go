@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/go-redis/redis/v7"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -19,8 +18,6 @@ import (
 )
 
 type Peer struct {
-	rdb           *redis.Client
-	rdbGoPy       string
 	activePeers   string
 	allPeers      string
 	host          host.Host
@@ -47,7 +44,6 @@ type Report struct {
 
 func NewPeer(cfg *config) *Peer {
 	p := &Peer{
-		rdbGoPy:       cfg.redisChannelGoPy,
 		port:          cfg.listenPort,
 		hostname:      cfg.listenHost,
 		protocol:      cfg.ProtocolID,
@@ -65,12 +61,6 @@ func NewPeer(cfg *config) *Peer {
 }
 
 func (p *Peer) peerInit() error {
-	err := p.redisInit()
-	if err != nil {
-		fmt.Println("[PEER] Database connection failed -", err)
-		return err
-	}
-
 	// prepare p2p host
 	p.p2pInit(p.keyFile, p.resetKey)
 
@@ -84,36 +74,12 @@ func (p *Peer) peerInit() error {
 	p.peerstore.readFromFile(p.privKey)
 
 	// run peer discovery in the background
-	err = p.discoverPeers()
+	err := p.discoverPeers()
 	if err != nil {
 		return err
 	}
 
 	go p.pingLoop()
-	return nil
-}
-
-func (p *Peer) redisInit() error {
-	// connect to the database
-	p.rdb = redis.NewClient(&redis.Options{
-		Addr:     p.dbAddress,
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
-
-	pongErr := p.rdb.Ping().Err()
-
-	if pongErr != nil {
-		fmt.Println("[PEER] Database connection failed -", pongErr)
-		return pongErr
-	}
-
-	// delete db
-	if p.redisDelete {
-		fmt.Println("[PEER] Deleting database")
-		p.rdb.FlushAll()
-	}
-
 	return nil
 }
 
@@ -248,11 +214,11 @@ func (p *Peer) listener(stream network.Stream) {
 }
 
 func (p *Peer) sayHello(peerData *PeerData) {
-	if p.closing{
+	if p.closing {
 		return
 	}
 
-	response, ok := p.sendMessageToPeerData(peerData, "hello version1\n", 10 * time.Second)
+	response, ok := p.sendMessageToPeerData(peerData, "hello version1\n", 10*time.Second)
 
 	if !ok {
 		return
@@ -277,7 +243,7 @@ func (p *Peer) sayHello(peerData *PeerData) {
 }
 
 func (p *Peer) handleHello(remotePeerData *PeerData, stream network.Stream, command *[]string) {
-	if p.closing{
+	if p.closing {
 		return
 	}
 
@@ -309,7 +275,7 @@ func (p *Peer) handleHello(remotePeerData *PeerData, stream network.Stream, comm
 }
 
 func (p *Peer) sendPing(remotePeerData *PeerData) {
-	if p.closing{
+	if p.closing {
 		return
 	}
 	fmt.Println("[PEER PING]")
@@ -321,7 +287,7 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 	}
 
 	fmt.Println("[PEER PING] Sending ping at", time.Now())
-	response, ok := p.sendMessageToPeerData(remotePeerData, "ping\n", 10 * time.Second)
+	response, ok := p.sendMessageToPeerData(remotePeerData, "ping\n", 10*time.Second)
 
 	if response == "pong\n" && ok {
 		remotePeerData.addBasicInteraction(1)
@@ -338,7 +304,7 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 }
 
 func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
-	if p.closing{
+	if p.closing {
 		return
 	}
 	fmt.Println("[PEER PING] Received ping at ", time.Now())
@@ -381,7 +347,7 @@ func (p *Peer) handleGenericMessage(peerID string, message string) {
 		return
 	}
 
-	p.rdb.Publish(p.rdbGoPy, reportString)
+	dbw.sendBytesToChannel(reportString)
 }
 
 func (p *Peer) close() {
@@ -427,7 +393,7 @@ func (p *Peer) pingLoop() {
 // timeout: timeout to wait for reply. If timeout is set to 0, the stream is closed right after sending, without reading any replies.
 // return response string: the response sent by the peer. Empty string if timeout is zero or if there were errors
 // return success bool: true if everything went smoothly, false in case of errors (or no reply from peer)
-func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout time.Duration) (string, bool){
+func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout time.Duration) (string, bool) {
 	fmt.Println("sending ", message, " to:", peerData.peerID)
 	// open stream
 	stream := p.openStreamFromPeerData(peerData)
