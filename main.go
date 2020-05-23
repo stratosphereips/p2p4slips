@@ -40,6 +40,7 @@ func main() {
 	dbw = &DBWrapper{dbAddress: "", rdbGoPy:cfg.redisChannelGoPy}
 	dbw.initDB()
 
+	// initialize peer
 	peer := NewPeer(cfg)
 	err := peer.peerInit()
 
@@ -48,11 +49,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	// initialize the node listening for data from slips
 	slist := SListener{channelName:cfg.redisChannelPyGo, dbAddress:cfg.redisDb, peer:peer}
 	go slist.dbInit()
 
+	// run tests
+	// TODO: remove tests for production
 	go runTests(cfg.redisDb, cfg.redisChannelPyGo)
 
+	// neatly exit when termination signal is received
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 
