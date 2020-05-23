@@ -49,6 +49,7 @@ func NewPeer(cfg *config) *Peer {
 	p := &Peer{
 		rdbGoPy:       cfg.redisChannelGoPy,
 		port:          cfg.listenPort,
+		hostname:      cfg.listenHost,
 		protocol:      cfg.ProtocolID,
 		dbAddress:     cfg.redisDb,
 		redisDelete:   cfg.redisDelete,
