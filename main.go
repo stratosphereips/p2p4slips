@@ -37,7 +37,7 @@ func main() {
 	fmt.Printf("[MAIN] Pigeon is starting on TCP Port %d\n", cfg.listenPort)
 
 	// initialize database interface
-	dbw = &DBWrapper{dbAddress: "", rdbGoPy:cfg.redisChannelGoPy}
+	dbw = &DBWrapper{dbAddress: "", rdbGoPy: cfg.redisChannelGoPy}
 	dbw.initDB()
 
 	// initialize peer
@@ -50,7 +50,7 @@ func main() {
 	}
 
 	// initialize the node listening for data from slips
-	slist := SListener{channelName:cfg.redisChannelPyGo, dbAddress:cfg.redisDb, peer:peer}
+	slist := SListener{channelName: cfg.redisChannelPyGo, dbAddress: cfg.redisDb, peer: peer}
 	go slist.dbInit()
 
 	// run tests
@@ -61,16 +61,18 @@ func main() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 
-	<- ch
+	<-ch
 	fmt.Printf("\nReceived signal, shutting down...\n")
 
 	peer.close()
 	os.Exit(0)
 }
 
+// verify that the chosen port is not used by another service by trying to open a tcp socket on it
+// if the port is already used, this function will panic
 func testPort(listenPort int) {
 	portStr := strconv.Itoa(listenPort)
-	socket, err := net.Listen("tcp", ":" + portStr)
+	socket, err := net.Listen("tcp", ":"+portStr)
 
 	if err != nil {
 		panicMsg := fmt.Sprintf("can't listen on port %q: %s", portStr, err)
@@ -80,8 +82,12 @@ func testPort(listenPort int) {
 	_ = socket.Close()
 }
 
-func renameFilesAndChannels(cfg *config){
+// check if config requires port to be appended to config strings, and if so, append the port
+// this affects file names (key file and peerstore file) and channels for communicating with python module
+func renameFilesAndChannels(cfg *config) {
 	if cfg.renameWithPort {
+		// if file name is empty, it means that file saving should not be used
+		// therefore port should not be added to empty file names, as this would make them no longer empty
 		if cfg.keyFile != "" {
 			cfg.keyFile = fmt.Sprintf("%s%d", cfg.keyFile, cfg.listenPort)
 		}
