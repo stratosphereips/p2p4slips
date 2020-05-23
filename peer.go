@@ -18,14 +18,10 @@ import (
 )
 
 type Peer struct {
-	activePeers   string
-	allPeers      string
 	host          host.Host
 	port          int
 	hostname      string
 	protocol      string
-	dbAddress     string
-	redisDelete   bool
 	rendezVous    string
 	ctx           context.Context
 	peerstore     PeerStore
@@ -47,8 +43,6 @@ func NewPeer(cfg *config) *Peer {
 		port:          cfg.listenPort,
 		hostname:      cfg.listenHost,
 		protocol:      cfg.ProtocolID,
-		dbAddress:     cfg.redisDb,
-		redisDelete:   cfg.redisDelete,
 		rendezVous:    cfg.RendezvousString,
 		peerstore:     PeerStore{},
 		privKey:       nil,
@@ -63,9 +57,6 @@ func NewPeer(cfg *config) *Peer {
 func (p *Peer) peerInit() error {
 	// prepare p2p host
 	p.p2pInit(p.keyFile, p.resetKey)
-
-	p.activePeers = p.host.ID().Pretty() + "-active"
-	p.allPeers = p.host.ID().Pretty() + "-all"
 
 	// link to a listener for new connections
 	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
