@@ -51,7 +51,7 @@ func main() {
 
 	// initialize the node listening for data from slips
 	slist := SListener{peer: peer}
-	go slist.dbInit()
+	go slist.run()
 
 	// run tests
 	// TODO: remove tests for production

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-redis/redis/v7"
 	"strings"
 )
 
@@ -17,31 +16,14 @@ type PigeonScroll struct {
 	Recipient string `json:"recipient"`
 }
 
-func (s *SListener) dbInit() error {
-
-	// Go channel which receives messages.
-	ch := make(<-chan *redis.Message)
-	if !dbw.subscribeToPyGo(ch) {
-		fmt.Println("subscribing failed")
-		return errors.New("subscribing to db failed")
-	}
-	fmt.Println("subscribing ok")
-	// TODO: actually not subscribed...
-
-	// TODO: there was a part here that prevented the sample from working alongside SLIPS. I need to look into that.
-	// time.AfterFunc(time.Second, func() {
-	//    // When pubsub is closed channel is closed too.
-	//    _ = pubsub.Close()
-	//})
+func (s *SListener) run() {
 
 	// Consume messages.
-	for msg := range ch {
+	for msg := range dbw.ch {
 		// if redis is stopped, golang will show an error: pubsub.go:160: redis: discarding bad PubSub connection: EOF
 		// I don't know where to catch this, but it is not a problem. When redis is restarted, pubsub listens again
 		s.handleCommand(msg.Payload)
 	}
-
-	return nil
 }
 
 func (s *SListener) handleCommand(message string) {
