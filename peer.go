@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -30,12 +29,6 @@ type Peer struct {
 	resetKey      bool
 	peerstoreFile string
 	closing       bool
-}
-
-type Report struct {
-	Reporter  string `json:"reporter"`
-	ReportTme int64  `json:"report_time"`
-	Message   string `json:"message"`
 }
 
 func NewPeer(cfg *config) *Peer {
@@ -325,20 +318,13 @@ func (p *Peer) handleGoodbye(remotePeerData *PeerData) {
 }
 
 func (p *Peer) handleGenericMessage(peerID string, message string) {
-	report := Report{
+	report := &ReportStruct{
 		Reporter:  peerID,
 		ReportTme: time.Now().Unix(),
 		Message:   message,
 	}
 
-	reportString, err := json.Marshal(report)
-
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	dbw.sendBytesToChannel(reportString)
+	dbw.shareReport(report)
 }
 
 func (p *Peer) close() {

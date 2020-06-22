@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-type PeerDataUpdate struct {
+type PeerUpdateStruct struct {
 	PeerID       string    `json:"peerid"`
 	Ip           string    `json:"ip,omitempty"`
 	Reliability  float64   `json:"reliability,omitempty"`
@@ -16,12 +16,39 @@ type PeerDataUpdate struct {
 	// `json...` makes the properties to parse correctly when using json.Marshal
 }
 
-func (p *PeerDataUpdate) pdu2json() string {
+type ReportStruct struct {
+	Reporter  string `json:"reporter"`
+	ReportTme int64  `json:"report_time"`
+	Message   string `json:"message"`
+}
+
+type UpdateMessage struct {
+	MessageType string `json:"message_type"`
+	MessageContents PeerUpdateStruct `json:"message_contents"`
+}
+
+type ReportMessage struct {
+	MessageType string `json:"message_type"`
+	MessageContents ReportStruct `json:"message_contents"`
+}
+
+func (p *UpdateMessage) pdu2json() string {
 	byteData, err := json.Marshal(p)
 	data := string(byteData)
 	if err != nil {
 		fmt.Println(err)
 	}
+	fmt.Println(data)
+	return data
+}
+
+func (p *ReportMessage) pdu2json() string {
+	byteData, err := json.Marshal(p)
+	data := string(byteData)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(data)
 	return data
 }
 
@@ -55,31 +82,38 @@ func (dw *DBWrapper) initDB() bool {
 	return true
 }
 
+func (dw *DBWrapper) shareReport(data *ReportStruct){
+	pdum := &ReportMessage{
+		MessageType:     "go_data",
+		MessageContents: *data,
+	}
+
+	strJson := pdum.pdu2json()
+
+	dw.sendStringToChannel(strJson)
+}
+
 func (dw *DBWrapper) sharePeerDataUpdate(data *PeerData){
 	peerID := data.peerID
 	ip := data.lastUsedIP
 	reliability := data.Reliability
 
-	pdu := &PeerDataUpdate{
-		PeerID:      peerID,
-		Ip:          ip,
-		Reliability: reliability,
-		Timestamp:   time.Now().Unix(),
+	pdum := &UpdateMessage{
+		MessageType:     "peer_update",
+		MessageContents: PeerUpdateStruct{
+			PeerID:      peerID,
+			Ip:          ip,
+			Reliability: reliability,
+			Timestamp:   time.Now().Unix(),
+		},
 	}
 
-	strJson := pdu.pdu2json()
+	strJson := pdum.pdu2json()
 
-	dw.sendStringToChannel("peer_update " + strJson)
+	dw.sendStringToChannel(strJson)
 }
 
 func (dw *DBWrapper) sendStringToChannel(message string){
-
-	fmt.Println("[MESSAGE TO p2p_gopy]", message)
-
-	dw.rdb.Publish(dw.rdbGoPy, message)
-}
-
-func (dw *DBWrapper) sendBytesToChannel(message []byte){
 
 	fmt.Println("[MESSAGE TO p2p_gopy]", message)
 
