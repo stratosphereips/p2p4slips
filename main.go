@@ -28,7 +28,11 @@ func main() {
 		os.Exit(0)
 	}
 	
-	
+	if cfg.runTests {
+        fmt.Println("Running tests...")
+        runTests("127.0.0.1", "foo")
+        os.Exit(0)
+    }
 
 	// check if port is available - if not, panic
 	testPort(cfg.listenPort)
