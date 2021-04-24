@@ -8,6 +8,9 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+    "github.com/stratosphereips/p2p4slips/tests"
+    "github.com/stratosphereips/p2p4slips/database"
+    "github.com/stratosphereips/p2p4slips/peer"
 )
 
 var dbw *DBWrapper
@@ -30,7 +33,7 @@ func main() {
 	
 	if cfg.runTests {
         fmt.Println("Running tests...")
-        runTests("127.0.0.1", "foo")
+        tests.RunTests("127.0.0.1", "foo")
         os.Exit(0)
     }
 
@@ -61,7 +64,7 @@ func main() {
 
 	// run tests
 	// TODO: remove tests for production
-	go runTests(cfg.redisDb, cfg.redisChannelPyGo)
+	go tests.RunTests(cfg.redisDb, cfg.redisChannelPyGo)
 
 	// neatly exit when termination signal is received
 	ch := make(chan os.Signal, 1)
