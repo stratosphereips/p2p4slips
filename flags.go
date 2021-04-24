@@ -17,6 +17,8 @@ type config struct {
 	redisDelete      bool
 	redisChannelPyGo string
 	redisChannelGoPy string
+	runTests         bool
+	showHelp         bool
 }
 
 func parseFlags() *config {
@@ -43,8 +45,13 @@ func parseFlags() *config {
 	flag.StringVar(&c.redisDb, "redis-db", "localhost:6379", "Remote redis database")
 
 	flag.BoolVar(&c.redisDelete, "redis-delete", false, "Delete database when starting the program")
+    
+	flag.BoolVar(&c.runTests, "test", false, "Run a test script instead of the main program")
+    
 	flag.StringVar(&c.redisChannelPyGo, "redis-channel-pygo", "p2p_pygo", "Channel for listening to commands")
 	flag.StringVar(&c.redisChannelGoPy, "redis-channel-gopy", "p2p_gopy", "Channel for sending data to slips")
+    
+    flag.BoolVar(&c.showHelp, "help", false, "Display Help")
 
 	flag.Parse()
 	return c

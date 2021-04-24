@@ -13,10 +13,10 @@ import (
 var dbw *DBWrapper
 
 func main() {
-	help := flag.Bool("help", false, "Display Help")
+	
 	cfg := parseFlags()
 
-	if *help {
+	if cfg.showHelp {
 		fmt.Println("This is the P2P component of the Stratosphere Linux IPS.")
 		fmt.Println("Run './p2p-experiments' to start it.")
 		fmt.Println("For testing multiple peers on one machine, use './p2p-experiments -port [port]'")
@@ -27,6 +27,8 @@ func main() {
 
 		os.Exit(0)
 	}
+	
+	
 
 	// check if port is available - if not, panic
 	testPort(cfg.listenPort)
