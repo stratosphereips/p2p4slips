@@ -48,14 +48,19 @@ func main() {
 
 	// initialize database interface
 	database.DBW = &database.DBWrapper{DbAddress: "", RdbGoPy: cfg.RedisChannelGoPy, RdbPyGo: cfg.RedisChannelPyGo}
-	database.DBW.InitDB()
+	var dbSuccess = database.DBW.InitDB()
+
+	if !dbSuccess {
+		fmt.Println("[PEER] Initializing database failed")
+		os.Exit(1)
+	}
 
 	// initialize peer
 	peer := peer.NewPeer(cfg)
 	err := peer.PeerInit()
 
 	if err != nil {
-		fmt.Println("Initializing peer failed")
+		fmt.Println("[PEER] Initializing peer failed")
 		os.Exit(1)
 	}
 
