@@ -10,8 +10,6 @@ import (
 	"github.com/stratosphereips/p2p4slips/peer"
 )
 
-var dbw *database.DBWrapper
-
 type SListener struct {
 	Peer *peer.Peer
 }
@@ -24,7 +22,7 @@ type PigeonScroll struct {
 func (s *SListener) Run() {
 
 	// Consume messages.
-	for msg := range dbw.Ch {
+	for msg := range database.DBW.Ch {
 		// if redis is stopped, golang will show an error: pubsub.go:160: redis: discarding bad PubSub connection: EOF
 		// I don't know where to catch this, but it is not a problem. When redis is restarted, pubsub listens again
 		s.handleCommand(msg.Payload)
