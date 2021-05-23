@@ -6,6 +6,8 @@ import (
 	"github.com/go-redis/redis/v7"
 )
 
+var DBW *DBWrapper
+
 type DBWrapper struct {
 	DbAddress string
 	Rdb       *redis.Client

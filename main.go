@@ -10,10 +10,9 @@ import (
 	"syscall"
 
 	"github.com/stratosphereips/p2p4slips/database"
+	"github.com/stratosphereips/p2p4slips/slistener"
 	"github.com/stratosphereips/p2p4slips/tests"
 )
-
-var dbw *database.DBWrapper
 
 func main() {
 
@@ -46,8 +45,8 @@ func main() {
 	fmt.Printf("[MAIN] Pigeon is starting on TCP Port %d\n", cfg.listenPort)
 
 	// initialize database interface
-	dbw = &database.DBWrapper{DbAddress: "", RdbGoPy: cfg.redisChannelGoPy, RdbPyGo: cfg.redisChannelPyGo}
-	dbw.InitDB()
+	database.DBW = &database.DBWrapper{DbAddress: "", RdbGoPy: cfg.redisChannelGoPy, RdbPyGo: cfg.redisChannelPyGo}
+	database.DBW.InitDB()
 
 	// initialize peer
 	peer := NewPeer(cfg)
@@ -59,7 +58,7 @@ func main() {
 	}
 
 	// initialize the node listening for data from slips
-	slist := database.SListener{}
+	slist := slistener.SListener{}
 	// TODO: add the parameter back
 	//slist := database.SListener{Peer: peer}
 	go slist.Run()

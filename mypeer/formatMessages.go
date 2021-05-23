@@ -8,8 +8,6 @@ import (
 	"github.com/stratosphereips/p2p4slips/database"
 )
 
-var dbw *database.DBWrapper
-
 type PeerUpdateStruct struct {
 	PeerID      string  `json:"peerid"`
 	Ip          string  `json:"ip,omitempty"`
@@ -54,7 +52,7 @@ func (p *ReportMessage) pdu2json() string {
 	return data
 }
 
-func ShareReport(dw *database.DBWrapper, data *ReportStruct) {
+func ShareReport(data *ReportStruct) {
 	pdum := &ReportMessage{
 		MessageType:     "go_data",
 		MessageContents: *data,
@@ -62,10 +60,10 @@ func ShareReport(dw *database.DBWrapper, data *ReportStruct) {
 
 	strJson := pdum.pdu2json()
 
-	dw.SendStringToChannel(strJson)
+	database.DBW.SendStringToChannel(strJson)
 }
 
-func SharePeerDataUpdate(dw *database.DBWrapper, data *PeerData) {
+func SharePeerDataUpdate(data *PeerData) {
 	peerID := data.PeerID
 	ip := data.LastUsedIP
 	reliability := data.Reliability
@@ -82,5 +80,5 @@ func SharePeerDataUpdate(dw *database.DBWrapper, data *PeerData) {
 
 	strJson := pdum.pdu2json()
 
-	dw.SendStringToChannel(strJson)
+	database.DBW.SendStringToChannel(strJson)
 }

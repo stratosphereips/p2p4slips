@@ -8,7 +8,6 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peerstore"
-	"github.com/stratosphereips/p2p4slips/database"
 )
 
 type PeerStore struct {
@@ -16,7 +15,6 @@ type PeerStore struct {
 	SaveFile    string
 	AllPeers    map[string]*PeerData
 	ActivePeers map[string]*PeerData
-	dbw         *database.DBWrapper
 }
 
 func (ps *PeerStore) SaveToFile(key crypto.PrivKey) error {
@@ -86,7 +84,7 @@ func (ps *PeerStore) ActivatePeer(peerId string) (peerData *PeerData, isNew bool
 	peerData, ok := ps.ActivePeers[peerId]
 	if ok {
 		peerData.LastInteraction = time.Now()
-		SharePeerDataUpdate(ps.dbw, peerData)
+		SharePeerDataUpdate(peerData)
 		return peerData, false
 	}
 
@@ -95,14 +93,14 @@ func (ps *PeerStore) ActivatePeer(peerId string) (peerData *PeerData, isNew bool
 	if ok {
 		// if yes, update his info and move him to active peer list
 		peerData.LastInteraction = time.Now()
-		SharePeerDataUpdate(ps.dbw, peerData)
+		SharePeerDataUpdate(peerData)
 		ps.ActivePeers[peerId] = peerData
 		return peerData, false
 	}
 
 	// the peer is completely new, he should be created...
 	peerData = ps.CreateNewPeer(peerId)
-	SharePeerDataUpdate(ps.dbw, peerData)
+	SharePeerDataUpdate(peerData)
 
 	return peerData, true
 }

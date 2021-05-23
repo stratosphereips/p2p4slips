@@ -326,7 +326,7 @@ func (p *Peer) handleGenericMessage(peerID string, message string) {
 		Message:   message,
 	}
 
-	mypeer.ShareReport(dbw, report)
+	mypeer.ShareReport(report)
 }
 
 func (p *Peer) close() {
@@ -352,13 +352,13 @@ func (p *Peer) pingLoop() {
 		fmt.Println("[LOOP] printing active peers:")
 		for peerID := range p.peerstore.ActivePeers {
 			peerData := p.peerstore.ActivePeers[peerID]
-			fmt.Printf("[LOOP] peer %s: %d\n", peerID, peerData.BasicInteractions)
+			fmt.Printf("[LOOP] peer %s: %f\n", peerID, peerData.BasicInteractions)
 			p.sendPing(peerData)
 		}
 		fmt.Println("[LOOP] printing all peers:")
 		for peerID := range p.peerstore.AllPeers {
 			peerData := p.peerstore.AllPeers[peerID]
-			fmt.Printf("[LOOP] peer %s: %d\n", peerID, peerData.BasicInteractions)
+			fmt.Printf("[LOOP] peer %s: %f\n", peerID, peerData.BasicInteractions)
 		}
 		fmt.Println("[LOOP] done, sleeping 10s")
 		time.Sleep(10 * time.Second)

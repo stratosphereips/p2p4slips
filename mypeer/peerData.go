@@ -31,7 +31,7 @@ func (pd *PeerData) SetMultiaddr(multiAddress string) {
 	fmt.Println("IP address changed", remoteIP)
 	if pd.LastUsedIP != remoteIP {
 		pd.LastUsedIP = remoteIP
-		SharePeerDataUpdate(dbw, pd)
+		SharePeerDataUpdate(pd)
 	}
 }
 
@@ -40,7 +40,7 @@ func (pd *PeerData) SetVersion(value string) bool {
 		return false
 	}
 	pd.Version = value
-	SharePeerDataUpdate(dbw, pd)
+	SharePeerDataUpdate(pd)
 	return true
 }
 
@@ -120,5 +120,5 @@ func (pd *PeerData) AddBasicInteraction(rating float64) {
 		return
 	}
 	pd.Reliability = reliability
-	SharePeerDataUpdate(dbw, pd)
+	SharePeerDataUpdate(pd)
 }
