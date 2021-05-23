@@ -10,7 +10,7 @@ import (
 	"syscall"
 
 	"github.com/stratosphereips/p2p4slips/database"
-	"github.com/stratosphereips/p2p4slips/mypeer"
+	"github.com/stratosphereips/p2p4slips/peer"
 	"github.com/stratosphereips/p2p4slips/slistener"
 	"github.com/stratosphereips/p2p4slips/tests"
 	"github.com/stratosphereips/p2p4slips/utils"
@@ -51,7 +51,7 @@ func main() {
 	database.DBW.InitDB()
 
 	// initialize peer
-	peer := mypeer.NewPeer(cfg)
+	peer := peer.NewPeer(cfg)
 	err := peer.PeerInit()
 
 	if err != nil {

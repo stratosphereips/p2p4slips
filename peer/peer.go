@@ -1,4 +1,4 @@
-package mypeer
+package peer
 
 import (
 	"bufio"
@@ -12,7 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	libp2ppeer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stratosphereips/p2p4slips/utils"
@@ -100,7 +100,7 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 func (p *Peer) discoverPeers() error {
 	fmt.Println("Looking for peers")
 
-	peerChan, err := InitMDNS(p.ctx, p.host, p.rendezVous)
+	peerChan, err := utils.InitMDNS(p.ctx, p.host, p.rendezVous)
 
 	if err != nil {
 		return err
@@ -335,7 +335,7 @@ func (p *Peer) Close() {
 	time.Sleep(1 * time.Second)
 
 	// tell peers that this node is shutting down
-	p.sendMessageToPeerId("goodbye\n", "*")
+	p.SendMessageToPeerId("goodbye\n", "*")
 	// wait till the message is sent, otherwise the host is closed too early and sending fails
 	time.Sleep(1 * time.Second)
 
@@ -412,7 +412,7 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
 	}
 
 	// addrInfo from multiaddress
-	remotePeer, err := peer.AddrInfoFromP2pAddr(multiaddress)
+	remotePeer, err := libp2ppeer.AddrInfoFromP2pAddr(multiaddress)
 	if err != nil {
 		fmt.Println("[OPEN STREAM] Error creating addrInfo from multiaddress:", err)
 		return nil
@@ -519,7 +519,7 @@ func (p *Peer) closeStream(stream network.Stream) {
 // If the given peerid doesn't exist, doesn't reply etc, it is skipped
 // message: the string to send
 // peerid: the peerid of the peer. Or * to broadcast to multiple peers
-func (p *Peer) sendMessageToPeerId(message string, peerId string) {
+func (p *Peer) SendMessageToPeerId(message string, peerId string) {
 	// the functions should:
 	var contactList map[string]*PeerData
 

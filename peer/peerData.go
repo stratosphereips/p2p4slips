@@ -1,4 +1,4 @@
-package mypeer
+package peer
 
 import (
 	"fmt"

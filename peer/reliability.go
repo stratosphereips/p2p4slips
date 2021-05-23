@@ -1,4 +1,4 @@
-package mypeer
+package peer
 
 func ComputeReliability(interactions []float64) float64 {
 	// TODO: improve reliability computation

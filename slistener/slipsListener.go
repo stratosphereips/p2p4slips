@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	"github.com/stratosphereips/p2p4slips/database"
-	"github.com/stratosphereips/p2p4slips/mypeer"
+	"github.com/stratosphereips/p2p4slips/peer"
 )
 
 var dbw *database.DBWrapper
 
 type SListener struct {
-	Peer *mypeer.Peer
+	Peer *peer.Peer
 }
 
 type PigeonScroll struct {
@@ -44,7 +44,7 @@ func (s *SListener) handleCommand(message string) {
 	fmt.Println("[SLISTENER] Message data sent from Slips", ps)
 
 	// send the message to the peer specified in the scroll
-	// TODO: this was uncommented s.peer.sendMessageToPeerId(ps.Message, ps.Recipient)
+	s.Peer.SendMessageToPeerId(ps.Message, ps.Recipient)
 
 	// the responses should be processed by remote peers eventually and should be processed by the peer listening loop
 	// and saved to slips database from there
