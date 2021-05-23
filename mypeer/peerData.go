@@ -7,13 +7,13 @@ import (
 )
 
 type PeerData struct {
-	peerID                string
-	lastUsedIP            string
-	version               string
+	PeerID                string
+	LastUsedIP            string
+	Version               string
 	Reliability           float64
 	LastInteraction       time.Time
 	LastGoodPing          time.Time
-	lastMultiAddress      string
+	LastMultiAddress      string
 	BasicInteractions     []float64
 	BasicInteractionTimes []time.Time
 	// TODO: move all manipulation to getters and setters, which notify slips
@@ -21,30 +21,30 @@ type PeerData struct {
 }
 
 func (pd *PeerData) SetMultiaddr(multiAddress string) {
-	if multiAddress == pd.lastMultiAddress {
+	if multiAddress == pd.LastMultiAddress {
 		return
 	}
 	fmt.Println("Updating multiaddr")
-	pd.lastMultiAddress = multiAddress
+	pd.LastMultiAddress = multiAddress
 
 	remoteIP := strings.Split(multiAddress, "/")[2]
 	fmt.Println("IP address changed", remoteIP)
-	if pd.lastUsedIP != remoteIP {
-		pd.lastUsedIP = remoteIP
+	if pd.LastUsedIP != remoteIP {
+		pd.LastUsedIP = remoteIP
 		SharePeerDataUpdate(dbw, pd)
 	}
 }
 
 func (pd *PeerData) SetVersion(value string) bool {
-	if value == pd.version {
+	if value == pd.Version {
 		return false
 	}
-	pd.version = value
+	pd.Version = value
 	SharePeerDataUpdate(dbw, pd)
 	return true
 }
 
-func (pd *PeerData) shouldIPingPeer() bool {
+func (pd *PeerData) ShouldIPingPeer() bool {
 	lastPing := pd.LastGoodPing
 
 	fmt.Println("[PEER PING] last contact was ", lastPing)
@@ -65,7 +65,7 @@ func (pd *PeerData) shouldIPingPeer() bool {
 	return true
 }
 
-func (pd *PeerData) shouldIDeactivatePeer() bool {
+func (pd *PeerData) ShouldIDeactivatePeer() bool {
 	lastPing := pd.LastGoodPing
 
 	if lastPing.IsZero() {
@@ -86,7 +86,7 @@ func (pd *PeerData) shouldIDeactivatePeer() bool {
 	return true
 }
 
-func (pd *PeerData) canHePingMe() bool {
+func (pd *PeerData) CanHePingMe() bool {
 
 	lastPing := pd.LastGoodPing
 
@@ -109,7 +109,7 @@ func (pd *PeerData) canHePingMe() bool {
 	return true
 }
 
-func (pd *PeerData) addBasicInteraction(rating float64) {
+func (pd *PeerData) AddBasicInteraction(rating float64) {
 	// TODO change ping to include latency in score
 	timestamp := time.Now()
 	pd.BasicInteractions = append(pd.BasicInteractions, rating)

@@ -113,7 +113,7 @@ func (ps *PeerStore) DeactivatePeer(peerId string) {
 
 func (ps *PeerStore) CreateNewPeer(peerId string) *PeerData {
 
-	peerData := &PeerData{peerID: peerId, LastInteraction: time.Now()}
+	peerData := &PeerData{PeerID: peerId, LastInteraction: time.Now()}
 	ps.ActivePeers[peerId] = peerData
 	ps.AllPeers[peerId] = peerData
 

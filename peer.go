@@ -100,7 +100,7 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 func (p *Peer) discoverPeers() error {
 	fmt.Println("Looking for peers")
 
-	peerChan, err := initMDNS(p.ctx, p.host, p.rendezVous)
+	peerChan, err := mypeer.InitMDNS(p.ctx, p.host, p.rendezVous)
 
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func (p *Peer) discoverPeers() error {
 				if err := p.host.Connect(p.ctx, peerAddress); err != nil {
 					fmt.Println("Connection failed:", err)
 					fmt.Println("Please make sure that the port of this Node is not used by other processes")
-					peerData.addBasicInteraction(0)
+					peerData.AddBasicInteraction(0)
 					return
 				}
 
@@ -157,13 +157,13 @@ func (p *Peer) listener(stream network.Stream) {
 
 	if err != nil {
 		fmt.Println("Error reading from buffer")
-		remotePeerData.addBasicInteraction(0)
+		remotePeerData.AddBasicInteraction(0)
 		return
 	}
 
 	if len(str) == 0 {
 		fmt.Println("Peer sent empty message")
-		remotePeerData.addBasicInteraction(0)
+		remotePeerData.AddBasicInteraction(0)
 		return
 	}
 
@@ -177,7 +177,7 @@ func (p *Peer) listener(stream network.Stream) {
 	if len(commands) == 0 {
 		// peer sent empty message
 		fmt.Println("[", remotePeer, "] sent an empty string")
-		remotePeerData.addBasicInteraction(0)
+		remotePeerData.AddBasicInteraction(0)
 		return
 	}
 
@@ -228,7 +228,7 @@ func (p *Peer) sayHello(peerData *mypeer.PeerData) {
 	peerData.SetVersion(remoteVersion)
 }
 
-func (p *Peer) handleHello(remotePeerData *peer.PeerData, stream network.Stream, command *[]string) {
+func (p *Peer) handleHello(remotePeerData *mypeer.PeerData, stream network.Stream, command *[]string) {
 	if p.closing {
 		return
 	}
@@ -246,18 +246,18 @@ func (p *Peer) handleHello(remotePeerData *peer.PeerData, stream network.Stream,
 	if !remotePeerData.SetVersion(remoteVersion) {
 		// hello message should not be sent unless the version changed or the peer is unknown (changes version as well)
 		fmt.Println("Peer sent unsolicited hello")
-		remotePeerData.addBasicInteraction(0)
+		remotePeerData.AddBasicInteraction(0)
 	}
 
 	_, ok := p.sendMessageToStream(stream, "hello version1\n", 0)
 
 	if !ok {
 		fmt.Println("Something went wrong when sending hello reply")
-		remotePeerData.addBasicInteraction(0)
+		remotePeerData.AddBasicInteraction(0)
 		return
 	}
 
-	remotePeerData.addBasicInteraction(1)
+	remotePeerData.AddBasicInteraction(1)
 }
 
 func (p *Peer) sendPing(remotePeerData *mypeer.PeerData) {
@@ -284,7 +284,7 @@ func (p *Peer) sendPing(remotePeerData *mypeer.PeerData) {
 		remotePeerData.AddBasicInteraction(0)
 		if remotePeerData.ShouldIDeactivatePeer() {
 			fmt.Println("[PEER PING] It's been to long since the peer has been online, deactivating him")
-			p.peerstore.DeactivatePeer(remotePeerData.peerID)
+			p.peerstore.DeactivatePeer(remotePeerData.PeerID)
 		}
 	}
 }
@@ -316,17 +316,17 @@ func (p *Peer) handlePing(remotePeerData *mypeer.PeerData, stream network.Stream
 }
 
 func (p *Peer) handleGoodbye(remotePeerData *mypeer.PeerData) {
-	p.peerstore.DeactivatePeer(remotePeerData.peerID)
+	p.peerstore.DeactivatePeer(remotePeerData.PeerID)
 }
 
 func (p *Peer) handleGenericMessage(peerID string, message string) {
-	report := &ReportStruct{
+	report := &mypeer.ReportStruct{
 		Reporter:  peerID,
 		ReportTme: time.Now().Unix(),
 		Message:   message,
 	}
 
-	dbw.ShareReport(report)
+	mypeer.ShareReport(dbw, report)
 }
 
 func (p *Peer) close() {
@@ -356,8 +356,8 @@ func (p *Peer) pingLoop() {
 			p.sendPing(peerData)
 		}
 		fmt.Println("[LOOP] printing all peers:")
-		for peerID := range p.peerstore.allPeers {
-			peerData := p.peerstore.allPeers[peerID]
+		for peerID := range p.peerstore.AllPeers {
+			peerData := p.peerstore.AllPeers[peerID]
 			fmt.Printf("[LOOP] peer %s: %d\n", peerID, peerData.BasicInteractions)
 		}
 		fmt.Println("[LOOP] done, sleeping 10s")
@@ -372,8 +372,8 @@ func (p *Peer) pingLoop() {
 // timeout: timeout to wait for reply. If timeout is set to 0, the stream is closed right after sending, without reading any replies.
 // return response string: the response sent by the peer. Empty string if timeout is zero or if there were errors
 // return success bool: true if everything went smoothly, false in case of errors (or no reply from peer)
-func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout time.Duration) (string, bool) {
-	fmt.Println("sending ", message, " to:", peerData.peerID)
+func (p *Peer) sendMessageToPeerData(peerData *mypeer.PeerData, message string, timeout time.Duration) (string, bool) {
+	fmt.Println("sending ", message, " to:", peerData.PeerID)
 	// open stream
 	stream := p.openStreamFromPeerData(peerData)
 	// close stream when this function exits (useful to have it here, since there are multiple returns)
@@ -382,7 +382,7 @@ func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout
 	// give up if stream opening failed, lower peer's reliability
 	if stream == nil {
 		fmt.Println("Couldn't open the stream")
-		peerData.addBasicInteraction(0)
+		peerData.AddBasicInteraction(0)
 		return "", false
 	}
 
@@ -392,7 +392,7 @@ func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout
 	// lower peer's reputation in case of errors
 	if !ok {
 		fmt.Println("Couldn't send the message")
-		peerData.addBasicInteraction(0)
+		peerData.AddBasicInteraction(0)
 	}
 
 	return response, ok
@@ -401,8 +401,8 @@ func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout
 // Open a stream to the remote peer. Return the stream, or nil in case of errors. Peer reliability is not modified.
 // peerData: data of the target peer
 // return stream network.Stream: a stream with the given peer, or nil in case of errors
-func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
-	remoteMA := peerData.lastMultiAddress
+func (p *Peer) openStreamFromPeerData(peerData *mypeer.PeerData) network.Stream {
+	remoteMA := peerData.LastMultiAddress
 
 	// new multiaddress from string
 	multiaddress, err := multiaddr.NewMultiaddr(remoteMA)

@@ -66,8 +66,8 @@ func ShareReport(dw *database.DBWrapper, data *ReportStruct) {
 }
 
 func SharePeerDataUpdate(dw *database.DBWrapper, data *PeerData) {
-	peerID := data.peerID
-	ip := data.lastUsedIP
+	peerID := data.PeerID
+	ip := data.LastUsedIP
 	reliability := data.Reliability
 
 	pdum := &UpdateMessage{
