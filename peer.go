@@ -4,6 +4,10 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
+	"strings"
+	"time"
+
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -11,9 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
-	"io"
-	"strings"
-	"time"
+	"github.com/stratosphereips/p2p4slips/mypeer"
 )
 
 type Peer struct {
@@ -23,7 +25,7 @@ type Peer struct {
 	protocol      string
 	rendezVous    string
 	ctx           context.Context
-	peerstore     PeerStore
+	peerstore     mypeer.PeerStore
 	privKey       crypto.PrivKey
 	keyFile       string
 	resetKey      bool
@@ -37,7 +39,7 @@ func NewPeer(cfg *config) *Peer {
 		hostname:      cfg.listenHost,
 		protocol:      cfg.ProtocolID,
 		rendezVous:    cfg.RendezvousString,
-		peerstore:     PeerStore{},
+		peerstore:     mypeer.PeerStore{},
 		privKey:       nil,
 		keyFile:       cfg.keyFile,
 		resetKey:      cfg.resetKeys,
@@ -54,8 +56,8 @@ func (p *Peer) peerInit() error {
 	// link to a listener for new connections
 	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
 
-	p.peerstore = PeerStore{store: p.host.Peerstore(), saveFile: p.peerstoreFile}
-	p.peerstore.readFromFile(p.privKey)
+	p.peerstore = mypeer.PeerStore{Store: p.host.Peerstore(), SaveFile: p.peerstoreFile}
+	p.peerstore.ReadFromFile(p.privKey)
 
 	// run peer discovery in the background
 	err := p.discoverPeers()
@@ -112,7 +114,7 @@ func (p *Peer) discoverPeers() error {
 			peerId := peerAddress.ID.Pretty()
 			fmt.Println(">>> Found peerAddress:", peerId)
 
-			peerData, isNew := p.peerstore.activatePeer(peerId)
+			peerData, isNew := p.peerstore.ActivatePeer(peerId)
 
 			if isNew {
 				// unknown peer
@@ -145,7 +147,7 @@ func (p *Peer) listener(stream network.Stream) {
 	remotePeerStr := remotePeer.Pretty()
 	remoteMA := fmt.Sprintf("%s/p2p/%s", stream.Conn().RemoteMultiaddr(), remotePeerStr)
 
-	remotePeerData, _ := p.peerstore.activatePeer(remotePeerStr)
+	remotePeerData, _ := p.peerstore.ActivatePeer(remotePeerStr)
 	remotePeerData.SetMultiaddr(remoteMA)
 
 	// Create a buffer stream for non blocking read and write.
@@ -197,7 +199,7 @@ func (p *Peer) listener(stream network.Stream) {
 	}
 }
 
-func (p *Peer) sayHello(peerData *PeerData) {
+func (p *Peer) sayHello(peerData *mypeer.PeerData) {
 	if p.closing {
 		return
 	}
@@ -215,18 +217,18 @@ func (p *Peer) sayHello(peerData *PeerData) {
 
 	if len(command) != 2 || command[0] != "hello" {
 		fmt.Println("Peer sent invalid hello reply")
-		peerData.addBasicInteraction(0)
+		peerData.AddBasicInteraction(0)
 		return
 	} else {
 		remoteVersion = command[1]
 	}
 
 	fmt.Println("PeerOld response ok, updating reputation")
-	peerData.addBasicInteraction(1)
+	peerData.AddBasicInteraction(1)
 	peerData.SetVersion(remoteVersion)
 }
 
-func (p *Peer) handleHello(remotePeerData *PeerData, stream network.Stream, command *[]string) {
+func (p *Peer) handleHello(remotePeerData *peer.PeerData, stream network.Stream, command *[]string) {
 	if p.closing {
 		return
 	}
@@ -235,7 +237,7 @@ func (p *Peer) handleHello(remotePeerData *PeerData, stream network.Stream, comm
 	var remoteVersion string
 	if len(*command) != 2 {
 		fmt.Println("Invalid Hello format")
-		remotePeerData.addBasicInteraction(0)
+		remotePeerData.AddBasicInteraction(0)
 		return
 	} else {
 		remoteVersion = (*command)[1]
@@ -258,14 +260,14 @@ func (p *Peer) handleHello(remotePeerData *PeerData, stream network.Stream, comm
 	remotePeerData.addBasicInteraction(1)
 }
 
-func (p *Peer) sendPing(remotePeerData *PeerData) {
+func (p *Peer) sendPing(remotePeerData *mypeer.PeerData) {
 	if p.closing {
 		return
 	}
 	fmt.Println("[PEER PING]")
 
 	// check last ping time, if it was recently, do not ping at all
-	if !remotePeerData.shouldIPingPeer() {
+	if !remotePeerData.ShouldIPingPeer() {
 		fmt.Println("[PEER PING] Peer was contacted recently, no need for ping")
 		return
 	}
@@ -274,20 +276,20 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 	response, ok := p.sendMessageToPeerData(remotePeerData, "ping\n", 10*time.Second)
 
 	if response == "pong\n" && ok {
-		remotePeerData.addBasicInteraction(1)
+		remotePeerData.AddBasicInteraction(1)
 		remotePeerData.LastGoodPing = time.Now()
 		fmt.Println("[PEER PING] Peer reply ok")
 	} else {
 		fmt.Println("[PEER PING] Peer sent wrong pong reply (or none at all)")
-		remotePeerData.addBasicInteraction(0)
-		if remotePeerData.shouldIDeactivatePeer() {
+		remotePeerData.AddBasicInteraction(0)
+		if remotePeerData.ShouldIDeactivatePeer() {
 			fmt.Println("[PEER PING] It's been to long since the peer has been online, deactivating him")
-			p.peerstore.deactivatePeer(remotePeerData.peerID)
+			p.peerstore.DeactivatePeer(remotePeerData.peerID)
 		}
 	}
 }
 
-func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
+func (p *Peer) handlePing(remotePeerData *mypeer.PeerData, stream network.Stream) {
 	if p.closing {
 		return
 	}
@@ -295,7 +297,7 @@ func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
 	rating := 1.0
 
 	// is he not pinging me too early?
-	if !remotePeerData.canHePingMe() {
+	if !remotePeerData.CanHePingMe() {
 		fmt.Println("[PEER PING REPLY] Peer is sending pings too often")
 		rating = 0
 	}
@@ -310,11 +312,11 @@ func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
 		remotePeerData.LastGoodPing = time.Now()
 	}
 
-	remotePeerData.addBasicInteraction(rating)
+	remotePeerData.AddBasicInteraction(rating)
 }
 
-func (p *Peer) handleGoodbye(remotePeerData *PeerData) {
-	p.peerstore.deactivatePeer(remotePeerData.peerID)
+func (p *Peer) handleGoodbye(remotePeerData *mypeer.PeerData) {
+	p.peerstore.DeactivatePeer(remotePeerData.peerID)
 }
 
 func (p *Peer) handleGenericMessage(peerID string, message string) {
@@ -324,7 +326,7 @@ func (p *Peer) handleGenericMessage(peerID string, message string) {
 		Message:   message,
 	}
 
-	dbw.shareReport(report)
+	dbw.ShareReport(report)
 }
 
 func (p *Peer) close() {
@@ -337,7 +339,7 @@ func (p *Peer) close() {
 	// wait till the message is sent, otherwise the host is closed too early and sending fails
 	time.Sleep(1 * time.Second)
 
-	p.peerstore.saveToFile(p.privKey)
+	p.peerstore.SaveToFile(p.privKey)
 
 	// shut the node down
 	if err := p.host.Close(); err != nil {
@@ -348,8 +350,8 @@ func (p *Peer) close() {
 func (p *Peer) pingLoop() {
 	for {
 		fmt.Println("[LOOP] printing active peers:")
-		for peerID := range p.peerstore.activePeers {
-			peerData := p.peerstore.activePeers[peerID]
+		for peerID := range p.peerstore.ActivePeers {
+			peerData := p.peerstore.ActivePeers[peerID]
 			fmt.Printf("[LOOP] peer %s: %d\n", peerID, peerData.BasicInteractions)
 			p.sendPing(peerData)
 		}
@@ -519,16 +521,16 @@ func (p *Peer) closeStream(stream network.Stream) {
 // peerid: the peerid of the peer. Or * to broadcast to multiple peers
 func (p *Peer) sendMessageToPeerId(message string, peerId string) {
 	// the functions should:
-	var contactList map[string]*PeerData
+	var contactList map[string]*mypeer.PeerData
 
 	// handle * as recipient
 	if peerId == "*" {
-		contactList = p.peerstore.activePeers
+		contactList = p.peerstore.ActivePeers
 		// TODO: choose 50 peers
 		// TODO: consider broadcasting
 	} else {
-		contactList = make(map[string]*PeerData)
-		peerData := p.peerstore.isActivePeer(peerId)
+		contactList = make(map[string]*mypeer.PeerData)
+		peerData := p.peerstore.IsActivePeer(peerId)
 
 		if peerData == nil {
 			fmt.Println("[PEER] peerid doesn't belong to any active peer: ", peerId)

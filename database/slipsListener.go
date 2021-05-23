@@ -7,8 +7,10 @@ import (
 	"strings"
 )
 
+var dbw *DBWrapper
+
 type SListener struct {
-	peer *Peer
+	// TODO: this was uncommented Peer *Peer
 }
 
 type PigeonScroll struct {
@@ -16,10 +18,10 @@ type PigeonScroll struct {
 	Recipient string `json:"recipient"`
 }
 
-func (s *SListener) run() {
+func (s *SListener) Run() {
 
 	// Consume messages.
-	for msg := range dbw.ch {
+	for msg := range dbw.Ch {
 		// if redis is stopped, golang will show an error: pubsub.go:160: redis: discarding bad PubSub connection: EOF
 		// I don't know where to catch this, but it is not a problem. When redis is restarted, pubsub listens again
 		s.handleCommand(msg.Payload)

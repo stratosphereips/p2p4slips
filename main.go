@@ -8,15 +8,15 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
-    "github.com/stratosphereips/p2p4slips/tests"
-    "github.com/stratosphereips/p2p4slips/database"
-    "github.com/stratosphereips/p2p4slips/peer"
+
+	"github.com/stratosphereips/p2p4slips/database"
+	"github.com/stratosphereips/p2p4slips/tests"
 )
 
-var dbw *DBWrapper
+var dbw *database.DBWrapper
 
 func main() {
-	
+
 	cfg := parseFlags()
 
 	if cfg.showHelp {
@@ -30,12 +30,12 @@ func main() {
 
 		os.Exit(0)
 	}
-	
+
 	if cfg.runTests {
-        fmt.Println("Running tests...")
-        tests.RunTests("127.0.0.1", "foo")
-        os.Exit(0)
-    }
+		fmt.Println("Running tests...")
+		tests.RunTests("127.0.0.1", "foo")
+		os.Exit(0)
+	}
 
 	// check if port is available - if not, panic
 	testPort(cfg.listenPort)
@@ -46,8 +46,8 @@ func main() {
 	fmt.Printf("[MAIN] Pigeon is starting on TCP Port %d\n", cfg.listenPort)
 
 	// initialize database interface
-	dbw = &DBWrapper{dbAddress: "", rdbGoPy: cfg.redisChannelGoPy, rdbPyGo: cfg.redisChannelPyGo}
-	dbw.initDB()
+	dbw = &database.DBWrapper{DbAddress: "", RdbGoPy: cfg.redisChannelGoPy, RdbPyGo: cfg.redisChannelPyGo}
+	dbw.InitDB()
 
 	// initialize peer
 	peer := NewPeer(cfg)
@@ -59,8 +59,10 @@ func main() {
 	}
 
 	// initialize the node listening for data from slips
-	slist := SListener{peer: peer}
-	go slist.run()
+	slist := database.SListener{}
+	// TODO: add the parameter back
+	//slist := database.SListener{Peer: peer}
+	go slist.Run()
 
 	// run tests
 	// TODO: remove tests for production
