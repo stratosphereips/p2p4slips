@@ -57,12 +57,8 @@ func (pd *PeerData) ShouldIPingPeer() bool {
 	fmt.Println("[PEER PING] time since last contact is ", timeSinceLastPing)
 
 	// TODO: justify the constant
-	if timeSinceLastPing < 15*time.Second {
-		// do not ping a peer that has been contacted less than five minutes ago
-		return false
-	}
-
-	return true
+	// do not ping a peer that has been contacted less than five minutes ago
+	return timeSinceLastPing >= 15*time.Second
 }
 
 func (pd *PeerData) ShouldIDeactivatePeer() bool {
@@ -77,13 +73,9 @@ func (pd *PeerData) ShouldIDeactivatePeer() bool {
 	fmt.Println("[PEER PING] time since last contact is ", timeSinceLastPing)
 
 	// TODO: justify the constant
-	if timeSinceLastPing < 60*time.Second {
-		// if last contact was less than a minute ago, the peer should be considered active
-		return false
-	}
-
-	// deactivate only if time since last (successful) ping is more than one minute
-	return true
+	// if last contact was less than a minute ago, the peer should be considered active (return false)
+	// deactivate only if time since last (successful) ping is more than one minute (return false)
+	return timeSinceLastPing >= 60*time.Second
 }
 
 func (pd *PeerData) CanHePingMe() bool {
@@ -100,13 +92,9 @@ func (pd *PeerData) CanHePingMe() bool {
 	fmt.Println("[PEER PING] time since last contact is ", timeSinceLastPing)
 
 	// TODO: justify the constant
-	if timeSinceLastPing < 5*time.Second {
-		// if this is less than five seconds, he should not be pinging me
-		return false
-	}
-
-	// if he has pinged me already, and it has been more than 5s ago, he can ping me
-	return true
+	// if this is less than five seconds, he should not be pinging me (return false)
+	// if he has pinged me already, and it has been more than 5s ago, he can ping me (return true)
+	return timeSinceLastPing >= 5*time.Second
 }
 
 func (pd *PeerData) AddBasicInteraction(rating float64) {

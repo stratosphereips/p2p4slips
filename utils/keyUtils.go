@@ -1,27 +1,28 @@
-package main
+package utils
 
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/libp2p/go-libp2p-core/crypto"
 	"io/ioutil"
+
+	"github.com/libp2p/go-libp2p-core/crypto"
 )
 
-func (p *Peer) loadKey(keyFile string, keyReset bool) crypto.PrivKey {
+func LoadKey(keyFile string, keyReset bool) crypto.PrivKey {
 	var prvKey crypto.PrivKey
 	var err error
 
 	if keyReset {
 		// generate new key
 		fmt.Println("[KEY UTIL] Generating a new key")
-		prvKey = safeKeyGen()
-		saveKey(keyFile, prvKey)
+		prvKey = SafeKeyGen()
+		SaveKey(keyFile, prvKey)
 		return prvKey
 	}
 
 	if keyFile == "" {
 		fmt.Println("[KEY UTIL] Using a one time key")
-		prvKey = safeKeyGen()
+		prvKey = SafeKeyGen()
 		return prvKey
 	}
 
@@ -29,8 +30,8 @@ func (p *Peer) loadKey(keyFile string, keyReset bool) crypto.PrivKey {
 	data, err := ioutil.ReadFile(keyFile)
 	if err != nil {
 		fmt.Printf("[KEY UTIL] Key could not be read from file '%s' - %s\n", keyFile, err)
-		prvKey = safeKeyGen()
-		saveKey(keyFile, prvKey)
+		prvKey = SafeKeyGen()
+		SaveKey(keyFile, prvKey)
 		return prvKey
 	}
 
@@ -38,8 +39,8 @@ func (p *Peer) loadKey(keyFile string, keyReset bool) crypto.PrivKey {
 	prvKey, err = crypto.UnmarshalPrivateKey(data)
 	if err != nil {
 		fmt.Printf("[KEY UTIL] Key could not be decoded - %s\n", err)
-		prvKey = safeKeyGen()
-		saveKey(keyFile, prvKey)
+		prvKey = SafeKeyGen()
+		SaveKey(keyFile, prvKey)
 		return prvKey
 	}
 
@@ -47,7 +48,7 @@ func (p *Peer) loadKey(keyFile string, keyReset bool) crypto.PrivKey {
 	return prvKey
 }
 
-func safeKeyGen() crypto.PrivKey{
+func SafeKeyGen() crypto.PrivKey {
 	r := rand.Reader
 	prvKey, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
 	if err != nil {
@@ -57,7 +58,7 @@ func safeKeyGen() crypto.PrivKey{
 	return prvKey
 }
 
-func saveKey(keyFile string, prvKey crypto.PrivKey) {
+func SaveKey(keyFile string, prvKey crypto.PrivKey) {
 	// do not save null key
 	if prvKey == nil {
 		return

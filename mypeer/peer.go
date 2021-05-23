@@ -1,4 +1,4 @@
-package main
+package mypeer
 
 import (
 	"bufio"
@@ -15,7 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/stratosphereips/p2p4slips/mypeer"
+	"github.com/stratosphereips/p2p4slips/utils"
 )
 
 type Peer struct {
@@ -25,7 +25,7 @@ type Peer struct {
 	protocol      string
 	rendezVous    string
 	ctx           context.Context
-	peerstore     mypeer.PeerStore
+	peerstore     PeerStore
 	privKey       crypto.PrivKey
 	keyFile       string
 	resetKey      bool
@@ -33,30 +33,30 @@ type Peer struct {
 	closing       bool
 }
 
-func NewPeer(cfg *config) *Peer {
+func NewPeer(cfg *utils.Config) *Peer {
 	p := &Peer{
-		port:          cfg.listenPort,
-		hostname:      cfg.listenHost,
+		port:          cfg.ListenPort,
+		hostname:      cfg.ListenHost,
 		protocol:      cfg.ProtocolID,
 		rendezVous:    cfg.RendezvousString,
-		peerstore:     mypeer.PeerStore{},
+		peerstore:     PeerStore{},
 		privKey:       nil,
-		keyFile:       cfg.keyFile,
-		resetKey:      cfg.resetKeys,
-		peerstoreFile: cfg.peerstoreFile,
+		keyFile:       cfg.KeyFile,
+		resetKey:      cfg.ResetKeys,
+		peerstoreFile: cfg.PeerstoreFile,
 		closing:       false,
 	}
 	return p
 }
 
-func (p *Peer) peerInit() error {
+func (p *Peer) PeerInit() error {
 	// prepare p2p host
 	p.p2pInit(p.keyFile, p.resetKey)
 
 	// link to a listener for new connections
 	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
 
-	p.peerstore = mypeer.PeerStore{Store: p.host.Peerstore(), SaveFile: p.peerstoreFile}
+	p.peerstore = PeerStore{Store: p.host.Peerstore(), SaveFile: p.peerstoreFile}
 	p.peerstore.ReadFromFile(p.privKey)
 
 	// run peer discovery in the background
@@ -72,7 +72,7 @@ func (p *Peer) peerInit() error {
 func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 	p.ctx = context.Background()
 
-	prvKey := p.loadKey(keyFile, keyReset)
+	prvKey := utils.LoadKey(keyFile, keyReset)
 
 	p.privKey = prvKey
 
@@ -100,7 +100,7 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 func (p *Peer) discoverPeers() error {
 	fmt.Println("Looking for peers")
 
-	peerChan, err := mypeer.InitMDNS(p.ctx, p.host, p.rendezVous)
+	peerChan, err := InitMDNS(p.ctx, p.host, p.rendezVous)
 
 	if err != nil {
 		return err
@@ -199,7 +199,7 @@ func (p *Peer) listener(stream network.Stream) {
 	}
 }
 
-func (p *Peer) sayHello(peerData *mypeer.PeerData) {
+func (p *Peer) sayHello(peerData *PeerData) {
 	if p.closing {
 		return
 	}
@@ -228,7 +228,7 @@ func (p *Peer) sayHello(peerData *mypeer.PeerData) {
 	peerData.SetVersion(remoteVersion)
 }
 
-func (p *Peer) handleHello(remotePeerData *mypeer.PeerData, stream network.Stream, command *[]string) {
+func (p *Peer) handleHello(remotePeerData *PeerData, stream network.Stream, command *[]string) {
 	if p.closing {
 		return
 	}
@@ -260,7 +260,7 @@ func (p *Peer) handleHello(remotePeerData *mypeer.PeerData, stream network.Strea
 	remotePeerData.AddBasicInteraction(1)
 }
 
-func (p *Peer) sendPing(remotePeerData *mypeer.PeerData) {
+func (p *Peer) sendPing(remotePeerData *PeerData) {
 	if p.closing {
 		return
 	}
@@ -289,7 +289,7 @@ func (p *Peer) sendPing(remotePeerData *mypeer.PeerData) {
 	}
 }
 
-func (p *Peer) handlePing(remotePeerData *mypeer.PeerData, stream network.Stream) {
+func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
 	if p.closing {
 		return
 	}
@@ -315,21 +315,21 @@ func (p *Peer) handlePing(remotePeerData *mypeer.PeerData, stream network.Stream
 	remotePeerData.AddBasicInteraction(rating)
 }
 
-func (p *Peer) handleGoodbye(remotePeerData *mypeer.PeerData) {
+func (p *Peer) handleGoodbye(remotePeerData *PeerData) {
 	p.peerstore.DeactivatePeer(remotePeerData.PeerID)
 }
 
 func (p *Peer) handleGenericMessage(peerID string, message string) {
-	report := &mypeer.ReportStruct{
+	report := &ReportStruct{
 		Reporter:  peerID,
 		ReportTme: time.Now().Unix(),
 		Message:   message,
 	}
 
-	mypeer.ShareReport(report)
+	ShareReport(report)
 }
 
-func (p *Peer) close() {
+func (p *Peer) Close() {
 	// set closing to true, to stop all outgoing communication, wait till everything is sent
 	p.closing = true
 	time.Sleep(1 * time.Second)
@@ -372,7 +372,7 @@ func (p *Peer) pingLoop() {
 // timeout: timeout to wait for reply. If timeout is set to 0, the stream is closed right after sending, without reading any replies.
 // return response string: the response sent by the peer. Empty string if timeout is zero or if there were errors
 // return success bool: true if everything went smoothly, false in case of errors (or no reply from peer)
-func (p *Peer) sendMessageToPeerData(peerData *mypeer.PeerData, message string, timeout time.Duration) (string, bool) {
+func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout time.Duration) (string, bool) {
 	fmt.Println("sending ", message, " to:", peerData.PeerID)
 	// open stream
 	stream := p.openStreamFromPeerData(peerData)
@@ -401,7 +401,7 @@ func (p *Peer) sendMessageToPeerData(peerData *mypeer.PeerData, message string, 
 // Open a stream to the remote peer. Return the stream, or nil in case of errors. Peer reliability is not modified.
 // peerData: data of the target peer
 // return stream network.Stream: a stream with the given peer, or nil in case of errors
-func (p *Peer) openStreamFromPeerData(peerData *mypeer.PeerData) network.Stream {
+func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
 	remoteMA := peerData.LastMultiAddress
 
 	// new multiaddress from string
@@ -521,7 +521,7 @@ func (p *Peer) closeStream(stream network.Stream) {
 // peerid: the peerid of the peer. Or * to broadcast to multiple peers
 func (p *Peer) sendMessageToPeerId(message string, peerId string) {
 	// the functions should:
-	var contactList map[string]*mypeer.PeerData
+	var contactList map[string]*PeerData
 
 	// handle * as recipient
 	if peerId == "*" {
@@ -529,7 +529,7 @@ func (p *Peer) sendMessageToPeerId(message string, peerId string) {
 		// TODO: choose 50 peers
 		// TODO: consider broadcasting
 	} else {
-		contactList = make(map[string]*mypeer.PeerData)
+		contactList = make(map[string]*PeerData)
 		peerData := p.peerstore.IsActivePeer(peerId)
 
 		if peerData == nil {
@@ -545,6 +545,4 @@ func (p *Peer) sendMessageToPeerId(message string, peerId string) {
 
 		go p.sendMessageToPeerData(peerData, message, 0)
 	}
-
-	return
 }

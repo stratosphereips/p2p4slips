@@ -7,12 +7,13 @@ import (
 	"strings"
 
 	"github.com/stratosphereips/p2p4slips/database"
+	"github.com/stratosphereips/p2p4slips/mypeer"
 )
 
 var dbw *database.DBWrapper
 
 type SListener struct {
-	// TODO: this was uncommented Peer *Peer
+	Peer *mypeer.Peer
 }
 
 type PigeonScroll struct {
