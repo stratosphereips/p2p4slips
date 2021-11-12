@@ -32,6 +32,11 @@ func (s *SListener) Run() {
 func (s *SListener) handleCommand(message string) {
 	fmt.Println("[SLISTENER] New message from REDIS:", message)
 
+	if message == "stop_process" {
+		fmt.Println("[SLISTENER] Stop process received, awaiting termination signal..")
+		return
+	}
+
 	ps, err := s.parseJson(message)
 
 	if err != nil {
