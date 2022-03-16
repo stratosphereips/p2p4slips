@@ -47,14 +47,14 @@ func (pd *PeerData) SetVersion(value string) bool {
 func (pd *PeerData) ShouldIPingPeer() bool {
 	lastPing := pd.LastGoodPing
 
-	fmt.Println("[PEER PING] last contact was ", lastPing)
+	//fmt.Println("[PEER PING] last contact was ", lastPing)
 
 	if lastPing.IsZero() {
 		return true
 	}
 
 	timeSinceLastPing := time.Since(lastPing)
-	fmt.Println("[PEER PING] time since last contact is ", timeSinceLastPing)
+	//fmt.Println("[PEER PING] time since last contact is ", timeSinceLastPing)
 
 	// TODO: justify the constant
 	// do not ping a peer that has been contacted less than five minutes ago
@@ -70,7 +70,7 @@ func (pd *PeerData) ShouldIDeactivatePeer() bool {
 	}
 
 	timeSinceLastPing := time.Since(lastPing)
-	fmt.Println("[PEER PING] time since last contact is ", timeSinceLastPing)
+	//fmt.Println("[PEER PING] time since last contact is ", timeSinceLastPing)
 
 	// TODO: justify the constant
 	// if last contact was less than a minute ago, the peer should be considered active (return false)
@@ -82,14 +82,14 @@ func (pd *PeerData) CanHePingMe() bool {
 
 	lastPing := pd.LastGoodPing
 
-	fmt.Println("[PEER PING] last contact was ", lastPing)
+	//fmt.Println("[PEER PING] last contact was ", lastPing)
 
 	if lastPing.IsZero() {
 		return true
 	}
 
 	timeSinceLastPing := time.Since(lastPing)
-	fmt.Println("[PEER PING] time since last contact is ", timeSinceLastPing)
+	//fmt.Println("[PEER PING] time since last contact is ", timeSinceLastPing)
 
 	// TODO: justify the constant
 	// if this is less than five seconds, he should not be pinging me (return false)
