@@ -34,6 +34,7 @@ func (s *SListener) handleCommand(message string) {
 
 	if message == "stop_process" {
 		fmt.Println("[SLISTENER] Stop process received, awaiting termination signal..")
+		s.Peer.PeerShutdown()
 		return
 	}
 
