@@ -354,18 +354,18 @@ func (p *Peer) Close() {
 
 func (p *Peer) pingLoop() {
 	for {
-		fmt.Println("[LOOP] printing active peers:")
+		//fmt.Println("[LOOP] printing active peers:")
 		for peerID := range p.peerstore.ActivePeers {
 			peerData := p.peerstore.ActivePeers[peerID]
 			fmt.Printf("[LOOP] peer %s: %f\n", peerID, peerData.BasicInteractions)
 			p.sendPing(peerData)
 		}
-		fmt.Println("[LOOP] printing all peers:")
+		//fmt.Println("[LOOP] printing all peers:")
 		for peerID := range p.peerstore.AllPeers {
 			peerData := p.peerstore.AllPeers[peerID]
 			fmt.Printf("[LOOP] peer %s: %f\n", peerID, peerData.BasicInteractions)
 		}
-		fmt.Println("[LOOP] done, sleeping 10s")
+		//fmt.Println("[LOOP] done, sleeping 10s")
 		time.Sleep(10 * time.Second)
 	}
 }
