@@ -57,6 +57,8 @@ func main() {
 
 	// initialize peer
 	peer := peer.NewPeer(cfg)
+    // defer means do it at the	end of the function
+	defer peer.PeerShutdown()
 	err := peer.PeerInit()
 
 	if err != nil {

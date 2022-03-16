@@ -69,6 +69,11 @@ func (p *Peer) PeerInit() error {
 	return nil
 }
 
+func (p *Peer) PeerShutdown(){
+	p.host.Close()
+	fmt.Printf("[PEER] Closed port %d\n", p.port)
+}
+
 func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 	p.ctx = context.Background()
 
