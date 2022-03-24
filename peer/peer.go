@@ -357,13 +357,13 @@ func (p *Peer) pingLoop() {
 		//fmt.Println("[LOOP] printing active peers:")
 		for peerID := range p.peerstore.ActivePeers {
 			peerData := p.peerstore.ActivePeers[peerID]
-			fmt.Printf("[LOOP] peer %s: %f\n", peerID, peerData.BasicInteractions)
+			fmt.Printf("[LOOP] Listing active peer: %s\n", peerID)
 			p.sendPing(peerData)
 		}
 		//fmt.Println("[LOOP] printing all peers:")
 		for peerID := range p.peerstore.AllPeers {
-			peerData := p.peerstore.AllPeers[peerID]
-			fmt.Printf("[LOOP] peer %s: %f\n", peerID, peerData.BasicInteractions)
+// 			peerData := p.peerstore.AllPeers[peerID]
+			fmt.Printf("[LOOP] Listing all peers %s\n", peerID)
 		}
 		//fmt.Println("[LOOP] done, sleeping 10s")
 		time.Sleep(10 * time.Second)
