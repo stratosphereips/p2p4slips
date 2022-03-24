@@ -468,7 +468,7 @@ func (p *Peer) sendMessageToStream(stream network.Stream, message string, timeou
 		break
 	case <-time.After(timeout):
 		// peer didn't respond in time
-		fmt.Println("timeout")
+		fmt.Println("timeout reached without msgs from peer")
 		return data, false
 	}
 
@@ -500,7 +500,7 @@ func rw2channel(input chan string, rw *bufio.ReadWriter) {
 			if err == io.EOF {
 				return
 			}
-			fmt.Println("err on rw2channel:", err)
+			fmt.Println("Error while reading msg from peer: ", err)
 		}
 
 		input <- result
