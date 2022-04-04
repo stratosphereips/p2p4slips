@@ -283,12 +283,12 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 	if response == "pong\n" && ok {
 		remotePeerData.AddBasicInteraction(1)
 		remotePeerData.LastGoodPing = time.Now()
-		fmt.Printf("[PEER PING] Peer %s sent pong reply", remotePeerData.PeerID)
+		fmt.Printf("[PEER PING] Peer %s sent pong reply\n", remotePeerData.PeerID)
 	} else {
-		fmt.Printf("[PEER PING] Peer %s sent wrong pong reply (or none at all)", remotePeerData.PeerID)
+		fmt.Printf("[PEER PING] Peer %s sent wrong pong reply (or none at all)\n", remotePeerData.PeerID)
 		remotePeerData.AddBasicInteraction(0)
 		if remotePeerData.ShouldIDeactivatePeer() {
-			fmt.Printf("[PEER PING] It's been to long since the peer %s has been online, deactivating him", remotePeerData.PeerID)
+			fmt.Printf("[PEER PING] It's been to long since the peer %s has been online, deactivating him\n", remotePeerData.PeerID)
 			p.peerstore.DeactivatePeer(remotePeerData.PeerID)
 		}
 	}
@@ -305,7 +305,7 @@ func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
 
 	// is he not pinging me too early?
 	if !remotePeerData.CanHePingMe() {
-		fmt.Printf("[PEER PING REPLY] Peer %s is sending pings too often", remotePeerData.PeerID)
+		fmt.Printf("[PEER PING REPLY] Peer %s is sending pings too often\n", remotePeerData.PeerID)
 		rating = 0
 	}
 
@@ -410,6 +410,7 @@ func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout
 // peerData: data of the target peer
 // return stream network.Stream: a stream with the given peer, or nil in case of errors
 func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
+	fmt.Printf("[DEBUGGINGGG]  peerData: %s\n", peerData)
 	remoteMA := peerData.LastMultiAddress
 
 	// new multiaddress from string
