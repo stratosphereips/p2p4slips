@@ -410,7 +410,7 @@ func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout
 // peerData: data of the target peer
 // return stream network.Stream: a stream with the given peer, or nil in case of errors
 func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
-	fmt.Printf("[DEBUGGINGGG]  peerData: %s\n", peerData)
+	fmt.Printf("DEBUGGINGGG %+v\n", peerData)
 	remoteMA := peerData.LastMultiAddress
 
 	// new multiaddress from string
