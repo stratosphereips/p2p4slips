@@ -21,9 +21,10 @@ type PigeonScroll struct {
 
 func (s *SListener) Run() {
 
-	// Consume messages.
+	// Consume messages. (msgs arriving here are the ones sent by slips to ask other peers about ips )
 	for msg := range database.DBW.Ch {
-		// if redis is stopped, golang will show an error: pubsub.go:160: redis: discarding bad PubSub connection: EOF
+		// if redis is stopped, golang will show an error:
+		// pubsub.go:160: redis: discarding bad PubSub connection: EOF
 		// I don't know where to catch this, but it is not a problem. When redis is restarted, pubsub listens again
 		s.handleCommand(msg.Payload)
 	}
@@ -50,7 +51,8 @@ func (s *SListener) handleCommand(message string) {
 	// send the message to the peer specified in the scroll
 	s.Peer.SendMessageToPeerId(ps.Message, ps.Recipient)
 
-	// the responses should be processed by remote peers eventually and should be processed by the peer listening loop
+	// the responses should be processed by remote peers eventually
+	// and should be processed by the peer listening loop
 	// and saved to slips database from there
 }
 

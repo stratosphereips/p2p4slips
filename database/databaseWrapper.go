@@ -48,16 +48,16 @@ func (dw *DBWrapper) SendStringToChannel(message string) {
 func (dw *DBWrapper) subscribeToPyGo() bool {
 	// taken from https://godoc.org/github.com/go-redis/redis#example-PubSub-Receive
 	pubsub := dw.Rdb.Subscribe(dw.RdbPyGo)
-
 	// Wait for confirmation that subscription is created before publishing anything.
 	_, err := pubsub.Receive()
 	if err != nil {
 		fmt.Printf("[ERROR] Database connection failed - %s\n", err)
+		fmt.Printf("[ERROR] Error recieving msgs from channel - %s\n", dw.RdbPyGo)
 		return false
 	}
 
 	dw.Ch = pubsub.Channel()
-
+	fmt.Println("[DEBUGGING] subscribed to PYGO channel: %s\n", dw.RdbPyGo)
 	// TODO: there was a part here that prevented the sample from working alongside SLIPS. I need to look into that.
 	// time.AfterFunc(time.Second, func() {
 	//    // When pubsub is closed channel is closed too.

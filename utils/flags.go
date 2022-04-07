@@ -39,7 +39,7 @@ func ParseFlags() *Config {
 		" provided, peers will be loaded from the file and saved to it for later use. If no file is specified, or if "+
 		"the file cannot be decrypted with the given private key, empty peerstore will be created")
 
-	flag.BoolVar(&c.RenameWithPort, "rename-with-port", true, "Port is appended to filenames and "+
+	flag.BoolVar(&c.RenameWithPort, "rename-with-port", false, "Port is appended to filenames and "+
 		"channels for convenient running of more peers on one host. Set to false to keep filenames unchanged")
 
 	flag.StringVar(&c.RedisDb, "redis-db", "localhost:6379", "Remote redis database")
