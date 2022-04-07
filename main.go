@@ -41,11 +41,14 @@ func main() {
 
 	// check if port is available - if not, panic
 	testPort(cfg.ListenPort)
-
-	// add port to file names and channels (if config specifies it)
-	renameFilesAndChannels(cfg)
+	if cfg.RenameWithPort {
+		fmt.Printf("[DEBUGGING]: renaming channels and files with port %d\n", cfg.ListenPort)
+		// add port to file names and channels (if config specifies it)
+		renameFilesAndChannels(cfg)
+	}
 
 	fmt.Printf("[MAIN] Pigeon is starting on TCP Port %d\n", cfg.ListenPort)
+	fmt.Printf("[DEBUGGING] starting db with PyGo channel: %s\n", cfg.RedisChannelPyGo)
 
 	// initialize database interface
 	database.DBW = &database.DBWrapper{DbAddress: "", RdbGoPy: cfg.RedisChannelGoPy,
