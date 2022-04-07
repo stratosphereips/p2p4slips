@@ -26,7 +26,7 @@ func ParseFlags() *Config {
 
 	flag.StringVar(&c.RendezvousString, "rendezvous", "slips", "Unique string to identify group "+
 		"of nodes. Share this with your friends to let them connect with you")
-	flag.StringVar(&c.ListenHost, "host", "0.0.0.0", "The bootstrap node host listen address\n")
+	flag.StringVar(&c.ListenHost, "host", "", "The bootstrap node host listen address\n")
 	flag.StringVar(&c.ProtocolID, "pid", "/slips/1.0", "Sets a protocol id for stream headers")
 	flag.IntVar(&c.ListenPort, "port", 4001, "node listen port")
 
