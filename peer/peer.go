@@ -54,9 +54,11 @@ func (p *Peer) PeerInit() error {
 	p.p2pInit(p.keyFile, p.resetKey)
 
 	// link to a listener for new connections
-	p.host.SetStreamHandler(protocol.ID(p.protocol), p.listener)
+	p.host.SetStreamHandler(protocol.ID(p.protocol),
+		p.listener)
 
-	p.peerstore = PeerStore{Store: p.host.Peerstore(), SaveFile: p.peerstoreFile}
+	p.peerstore = PeerStore{Store: p.host.Peerstore(),
+		SaveFile: p.peerstoreFile}
 	p.peerstore.ReadFromFile(p.privKey)
 
 	// run peer discovery in the background
@@ -69,7 +71,7 @@ func (p *Peer) PeerInit() error {
 	return nil
 }
 
-func (p *Peer) PeerShutdown(){
+func (p *Peer) PeerShutdown() {
 	p.host.Close()
 	fmt.Printf("[PEER] Closed port %d\n", p.port)
 }
@@ -269,26 +271,26 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 	if p.closing {
 		return
 	}
-	fmt.Println("[PEER PING]")
+	//fmt.Println("[PEER PING]")
 
 	// check last ping time, if it was recently, do not ping at all
 	if !remotePeerData.ShouldIPingPeer() {
-		fmt.Println("[PEER PING] Peer was contacted recently, no need for ping")
+		fmt.Printf("[PEER PING] Peer %s was contacted recently, no need for ping", remotePeerData.PeerID)
 		return
 	}
 
-	fmt.Println("[PEER PING] Sending ping at", time.Now())
+	fmt.Println("[PEER PING] Sending ping to at", time.Now())
 	response, ok := p.sendMessageToPeerData(remotePeerData, "ping\n", 10*time.Second)
 
 	if response == "pong\n" && ok {
 		remotePeerData.AddBasicInteraction(1)
 		remotePeerData.LastGoodPing = time.Now()
-		fmt.Println("[PEER PING] Peer reply ok")
+		fmt.Printf("[PEER PING] Peer %s sent pong reply\n", remotePeerData.PeerID)
 	} else {
-		fmt.Println("[PEER PING] Peer sent wrong pong reply (or none at all)")
+		fmt.Printf("[PEER PING] Peer %s sent wrong pong reply (or none at all)\n", remotePeerData.PeerID)
 		remotePeerData.AddBasicInteraction(0)
 		if remotePeerData.ShouldIDeactivatePeer() {
-			fmt.Println("[PEER PING] It's been to long since the peer has been online, deactivating him")
+			fmt.Printf("[PEER PING] It's been to long since the peer %s has been online, deactivating him\n", remotePeerData.PeerID)
 			p.peerstore.DeactivatePeer(remotePeerData.PeerID)
 		}
 	}
@@ -298,23 +300,26 @@ func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
 	if p.closing {
 		return
 	}
-	fmt.Println("[PEER PING] Received ping at ", time.Now())
+	fmt.Println("[PEER PING] Received ping at \n", time.Now())
+	fmt.Println("[PEER PING] from %s\n ", remotePeerData.PeerID)
+
 	rating := 1.0
 
 	// is he not pinging me too early?
 	if !remotePeerData.CanHePingMe() {
-		fmt.Println("[PEER PING REPLY] Peer is sending pings too often")
+		fmt.Printf("[PEER PING REPLY] Peer %s is sending pings too often\n", remotePeerData.PeerID)
 		rating = 0
 	}
 
 	// reply to ping
-	fmt.Println("[PEER PING REPLY] Sending ping reply")
+	fmt.Printf("[PEER PING REPLY] Sending ping reply to %s\n", remotePeerData.PeerID)
 	_, ok := p.sendMessageToStream(stream, "pong\n", 0)
 	if !ok {
-		fmt.Println("[PEER PING REPLY] Something went wrong when sending ping reply")
+		fmt.Printf("[PEER PING REPLY] Something went wrong when sending ping reply to %s\n", remotePeerData.PeerID)
 		rating = 0
 	} else {
 		remotePeerData.LastGoodPing = time.Now()
+		fmt.Printf("[PEER PING REPLY] Ping reply successfully sent to %s\n", remotePeerData.PeerID)
 	}
 
 	remotePeerData.AddBasicInteraction(rating)
@@ -362,7 +367,7 @@ func (p *Peer) pingLoop() {
 		}
 		//fmt.Println("[LOOP] printing all peers:")
 		for peerID := range p.peerstore.AllPeers {
-// 			peerData := p.peerstore.AllPeers[peerID]
+			// 			peerData := p.peerstore.AllPeers[peerID]
 			fmt.Printf("[LOOP] Listing all peers %s\n", peerID)
 		}
 		//fmt.Println("[LOOP] done, sleeping 10s")
@@ -407,6 +412,7 @@ func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout
 // peerData: data of the target peer
 // return stream network.Stream: a stream with the given peer, or nil in case of errors
 func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
+	//fmt.Printf("DEBUGGINGGG %+v\n", peerData)
 	remoteMA := peerData.LastMultiAddress
 
 	// new multiaddress from string

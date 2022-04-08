@@ -26,7 +26,7 @@ func ParseFlags() *Config {
 
 	flag.StringVar(&c.RendezvousString, "rendezvous", "slips", "Unique string to identify group "+
 		"of nodes. Share this with your friends to let them connect with you")
-	flag.StringVar(&c.ListenHost, "host", "0.0.0.0", "The bootstrap node host listen address\n")
+	flag.StringVar(&c.ListenHost, "host", "", "The bootstrap node host listen address\n")
 	flag.StringVar(&c.ProtocolID, "pid", "/slips/1.0", "Sets a protocol id for stream headers")
 	flag.IntVar(&c.ListenPort, "port", 4001, "node listen port")
 
@@ -39,7 +39,7 @@ func ParseFlags() *Config {
 		" provided, peers will be loaded from the file and saved to it for later use. If no file is specified, or if "+
 		"the file cannot be decrypted with the given private key, empty peerstore will be created")
 
-	flag.BoolVar(&c.RenameWithPort, "rename-with-port", true, "Port is appended to filenames and "+
+	flag.BoolVar(&c.RenameWithPort, "rename-with-port", false, "Port is appended to filenames and "+
 		"channels for convenient running of more peers on one host. Set to false to keep filenames unchanged")
 
 	flag.StringVar(&c.RedisDb, "redis-db", "localhost:6379", "Remote redis database")
