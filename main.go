@@ -37,17 +37,21 @@ func main() {
 		tests.RunTests("127.0.0.1", "foo")
 		os.Exit(0)
 	}
+	fmt.Printf("[DEBUGGG] LISTENING on IP: %s\n", cfg.ListenHost)
 
 	// check if port is available - if not, panic
 	testPort(cfg.ListenPort)
-
-	// add port to file names and channels (if config specifies it)
-	renameFilesAndChannels(cfg)
+	if cfg.RenameWithPort {
+		fmt.Printf("[DEBUGGING]: renaming channels and files with port %d\n", cfg.ListenPort)
+		// add port to file names and channels (if config specifies it)
+		renameFilesAndChannels(cfg)
+	}
 
 	fmt.Printf("[MAIN] Pigeon is starting on TCP Port %d\n", cfg.ListenPort)
 
 	// initialize database interface
-	database.DBW = &database.DBWrapper{DbAddress: "", RdbGoPy: cfg.RedisChannelGoPy, RdbPyGo: cfg.RedisChannelPyGo}
+	database.DBW = &database.DBWrapper{DbAddress: "", RdbGoPy: cfg.RedisChannelGoPy,
+		RdbPyGo: cfg.RedisChannelPyGo}
 	var dbSuccess = database.DBW.InitDB()
 
 	if !dbSuccess {
@@ -57,7 +61,7 @@ func main() {
 
 	// initialize peer
 	peer := peer.NewPeer(cfg)
-    // defer means do it at the	end of the function
+	// defer means do it at the	end of the function
 	defer peer.PeerShutdown()
 	err := peer.PeerInit()
 

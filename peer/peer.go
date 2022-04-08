@@ -379,7 +379,8 @@ func (p *Peer) pingLoop() {
 // All connection errors affect the peer's reliability, there is no need to update it based on the success bool
 // peerData: data of the target peer
 // message: the string to send to the target peer
-// timeout: timeout to wait for reply. If timeout is set to 0, the stream is closed right after sending, without reading any replies.
+// timeout: timeout to wait for reply. If timeout is set to 0, the stream is closed right after sending,
+// without reading any replies.
 // return response string: the response sent by the peer. Empty string if timeout is zero or if there were errors
 // return success bool: true if everything went smoothly, false in case of errors (or no reply from peer)
 func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout time.Duration) (string, bool) {
