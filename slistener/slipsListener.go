@@ -31,7 +31,7 @@ func (s *SListener) Run() {
 }
 
 func (s *SListener) handleCommand(message string) {
-	fmt.Println("[SLISTENER] New message from REDIS:", message)
+	//fmt.Println("[SLISTENER] New message from REDIS:", message)
 
 	if message == "stop_process" {
 		fmt.Println("[SLISTENER] Stop process received, awaiting termination signal..")
@@ -46,7 +46,7 @@ func (s *SListener) handleCommand(message string) {
 		return
 	}
 
-	fmt.Println("[SLISTENER] Message data sent from Slips", ps)
+	//fmt.Println("[SLISTENER] Message sent from Slips: ", ps)
 
 	// send the message to the peer specified in the scroll
 	s.Peer.SendMessageToPeerId(ps.Message, ps.Recipient)

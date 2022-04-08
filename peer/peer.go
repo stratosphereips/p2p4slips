@@ -202,6 +202,7 @@ func (p *Peer) listener(stream network.Stream) {
 		return
 	} else {
 		fmt.Println("[", remotePeer, "] sent an unknown message:", str)
+		//now forward this msg to slips p2p module to deal with it
 		p.handleGenericMessage(remotePeerStr, str)
 	}
 }

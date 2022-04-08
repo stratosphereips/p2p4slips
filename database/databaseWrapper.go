@@ -39,9 +39,9 @@ func (dw *DBWrapper) InitDB() bool {
 }
 
 func (dw *DBWrapper) SendStringToChannel(message string) {
-
-	fmt.Println("[MESSAGE TO p2p_gopy]", message)
-
+	// sending the msg taken from the peer, to slips python module
+	//fmt.Println("[MESSAGE TO p2p_gopy]", message)
+	//fmt.Println("[pigeon -> p2p module]", message)
 	dw.Rdb.Publish(dw.RdbGoPy, message)
 }
 

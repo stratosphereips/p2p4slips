@@ -48,7 +48,7 @@ func (p *ReportMessage) pdu2json() string {
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(data)
+	//fmt.Println(data)
 	return data
 }
 
