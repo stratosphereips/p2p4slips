@@ -393,7 +393,15 @@ func (p *Peer) pingLoop() {
 // return response string: the response sent by the peer. Empty string if timeout is zero or if there were errors
 // return success bool: true if everything went smoothly, false in case of errors (or no reply from peer)
 func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout time.Duration) (string, bool) {
-	fmt.Println("sending ", message, " to:", peerData.PeerID)
+
+	// log the sent msg
+	rawDecodedText, err := base64.StdEncoding.DecodeString(message)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Sent to [ %s ] : %s \n", peerData.PeerID, rawDecodedText)
+	//fmt.Println("sending ", message, " to:", peerData.PeerID)
+
 	// open stream
 	stream := p.openStreamFromPeerData(peerData)
 	// close stream when this function exits (useful to have it here, since there are multiple returns)
