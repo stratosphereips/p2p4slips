@@ -205,10 +205,9 @@ func (p *Peer) listener(stream network.Stream) {
 
 		// log the received msg
 		rawDecodedText, err := base64.StdEncoding.DecodeString(str)
-		if err != nil {
-			panic(err)
+		if err == nil {
+			fmt.Printf("[ %s ] sent %s\n", remotePeer, rawDecodedText)
 		}
-		fmt.Printf("[ %s ] sent %s\n", remotePeer, rawDecodedText)
 
 		//now forward this msg to slips p2p module to deal with it
 		p.handleGenericMessage(remotePeerStr, str)
@@ -396,10 +395,9 @@ func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout
 
 	// log the sent msg
 	rawDecodedText, err := base64.StdEncoding.DecodeString(message)
-	if err != nil {
-		panic(err)
+	if err == nil {
+		fmt.Printf("Sent to [ %s ] : %s \n", peerData.PeerID, rawDecodedText)
 	}
-	fmt.Printf("Sent to [ %s ] : %s \n", peerData.PeerID, rawDecodedText)
 	//fmt.Println("sending ", message, " to:", peerData.PeerID)
 
 	// open stream
