@@ -75,7 +75,7 @@ func (s *SListener) parseJson(message string) (*PigeonScroll, error) {
 	}
 
 	if !strings.HasSuffix(ps.Message, "\n") {
-		fmt.Println("Adding newline at the end of slips message...")
+		//fmt.Println("Adding newline at the end of slips message...")
 		ps.Message = ps.Message + "\n"
 	}
 

@@ -3,11 +3,8 @@ package peer
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"fmt"
-	"io"
-	"strings"
-	"time"
-
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -16,6 +13,9 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stratosphereips/p2p4slips/utils"
+	"io"
+	"strings"
+	"time"
 )
 
 type Peer struct {
@@ -201,7 +201,15 @@ func (p *Peer) listener(stream network.Stream) {
 		p.handleGoodbye(remotePeerData)
 		return
 	} else {
-		fmt.Println("[", remotePeer, "] sent an unknown message:", str)
+		//fmt.Println("[", remotePeer, "] sent an unknown message:", str)
+
+		// log the received msg
+		rawDecodedText, err := base64.StdEncoding.DecodeString(str)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("[ %s ] sent %s\n", remotePeer, rawDecodedText)
+
 		//now forward this msg to slips p2p module to deal with it
 		p.handleGenericMessage(remotePeerStr, str)
 	}
@@ -276,7 +284,7 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 
 	// check last ping time, if it was recently, do not ping at all
 	if !remotePeerData.ShouldIPingPeer() {
-		fmt.Printf("[PEER PING] Peer %s was contacted recently, no need for ping", remotePeerData.PeerID)
+		//fmt.Printf("[PEER PING] Peer %s was contacted recently, no need for ping\n", remotePeerData.PeerID)
 		return
 	}
 
