@@ -206,7 +206,7 @@ func (p *Peer) listener(stream network.Stream) {
 		// log the received msg
 		rawDecodedText, err := base64.StdEncoding.DecodeString(str)
 		if err == nil {
-			fmt.Printf("[ %s ] sent %s\n", remotePeer, rawDecodedText)
+			fmt.Printf("Received from [ %s ] : %s\n", remotePeer, rawDecodedText)
 		}
 
 		//now forward this msg to slips p2p module to deal with it
