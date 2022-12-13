@@ -34,8 +34,17 @@ func (dw *DBWrapper) InitDB() bool {
 		fmt.Println("[PEER] Channel subscription failed")
 		return false
 	}
+	fmt.Println("[db] Database connection succeeded - ", dw.DbAddress)
 
 	return true
+}
+
+func (dw *DBWrapper) SaveMultiAddress(multiAddress string) {
+	// expiration 0 means the key won't expire
+
+	//fmt.Printf("[db] setting multiaddr to -  %s \n", multiAddress)
+	dw.Rdb.Set("multiAddress", multiAddress, 0)
+
 }
 
 func (dw *DBWrapper) SendStringToChannel(message string) {

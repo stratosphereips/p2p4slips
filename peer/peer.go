@@ -12,6 +12,7 @@ import (
 	libp2ppeer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/stratosphereips/p2p4slips/database"
 	"github.com/stratosphereips/p2p4slips/utils"
 	"io"
 	"strings"
@@ -100,7 +101,9 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 		return err
 	}
 
-	fmt.Printf("\n[*] Your Multiaddress Is: /ip4/%s/tcp/%v/p2p/%s\n", p.hostname, p.port, p.host.ID().Pretty())
+	multiAddress := fmt.Sprintf("/ip4/%s/tcp/%v/p2p/%s", p.hostname, p.port, p.host.ID().Pretty())
+	fmt.Println("\n[*] Your Multiaddress Is: ", multiAddress)
+	database.DBW.SaveMultiAddress(multiAddress)
 	return nil
 }
 
