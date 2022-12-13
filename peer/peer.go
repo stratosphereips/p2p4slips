@@ -193,7 +193,9 @@ func (p *Peer) listener(stream network.Stream) {
 		p.handleHello(remotePeerData, stream, &commands)
 		return
 	} else if str == "ping" {
-		fmt.Println("[", remotePeer, "] says ping")
+		dt := time.Now()
+		//fmt.Println("[", remotePeer, "] says ping at ", dt.Format(time.UnixDate))
+		fmt.Printf("[ %s ] says ping at %s \n", remotePeer, dt.Format(time.UnixDate))
 		p.handlePing(remotePeerData, stream)
 		return
 	} else if str == "goodbye" {
@@ -286,8 +288,8 @@ func (p *Peer) sendPing(remotePeerData *PeerData) {
 		//fmt.Printf("[PEER PING] Peer %s was contacted recently, no need for ping\n", remotePeerData.PeerID)
 		return
 	}
-
-	fmt.Println("[PEER PING] Sending ping to at", time.Now())
+	dt := time.Now()
+	fmt.Printf("[PEER PING] Sending ping to [ %s ] at %s \n", remotePeerData.PeerID, dt.Format(time.UnixDate))
 	response, ok := p.sendMessageToPeerData(remotePeerData, "ping\n", 10*time.Second)
 
 	if response == "pong\n" && ok {
@@ -308,8 +310,8 @@ func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
 	if p.closing {
 		return
 	}
-	fmt.Println("[PEER PING] Received ping at \n", time.Now())
-	fmt.Println("[PEER PING] from %s\n ", remotePeerData.PeerID)
+	//fmt.Println("[PEER PING] Received ping at \n", time.Now())
+	//fmt.Println("[PEER PING] from %s\n ", remotePeerData.PeerID)
 
 	rating := 1.0
 
@@ -320,7 +322,7 @@ func (p *Peer) handlePing(remotePeerData *PeerData, stream network.Stream) {
 	}
 
 	// reply to ping
-	fmt.Printf("[PEER PING REPLY] Sending ping reply to %s\n", remotePeerData.PeerID)
+	//fmt.Printf("[PEER PING REPLY] Sending ping reply to %s\n", remotePeerData.PeerID)
 	_, ok := p.sendMessageToStream(stream, "pong\n", 0)
 	if !ok {
 		fmt.Printf("[PEER PING REPLY] Something went wrong when sending ping reply to %s\n", remotePeerData.PeerID)
