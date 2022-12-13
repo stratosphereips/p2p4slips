@@ -376,10 +376,10 @@ func (p *Peer) pingLoop() {
 			p.sendPing(peerData)
 		}
 		//fmt.Println("[LOOP] printing all peers:")
-		for peerID := range p.peerstore.AllPeers {
-			// 			peerData := p.peerstore.AllPeers[peerID]
-			fmt.Printf("[LOOP] Listing all peers %s\n", peerID)
-		}
+		//for peerID := range p.peerstore.AllPeers {
+		// 			peerData := p.peerstore.AllPeers[peerID]
+		//fmt.Printf("[LOOP] Listing all peers %s\n", peerID)
+		//}
 		//fmt.Println("[LOOP] done, sleeping 10s")
 		time.Sleep(10 * time.Second)
 	}
@@ -398,7 +398,7 @@ func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout
 	// log the sent msg
 	rawDecodedText, err := base64.StdEncoding.DecodeString(message)
 	if err == nil {
-		fmt.Printf("Sent to [ %s ] : %s \n", peerData.PeerID, rawDecodedText)
+		fmt.Printf("Sent to [ %s ] : %s \n", peerData.PeerID, string(rawDecodedText))
 	}
 	//fmt.Println("sending ", message, " to:", peerData.PeerID)
 
