@@ -50,7 +50,7 @@ func main() {
 	fmt.Printf("[MAIN] Pigeon is starting on TCP Port %d\n", cfg.ListenPort)
 
 	// initialize database interface
-	database.DBW = &database.DBWrapper{DbAddress: "", RdbGoPy: cfg.RedisChannelGoPy,
+	database.DBW = &database.DBWrapper{DbAddress: cfg.RedisDb, RdbGoPy: cfg.RedisChannelGoPy,
 		RdbPyGo: cfg.RedisChannelPyGo}
 	var dbSuccess = database.DBW.InitDB()
 
