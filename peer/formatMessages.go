@@ -12,6 +12,7 @@ type PeerUpdateStruct struct {
 	PeerID      string  `json:"peerid"`
 	Ip          string  `json:"ip,omitempty"`
 	Reliability float64 `json:"reliability,omitempty"`
+	Connected   bool    `json:"connected"`
 	Timestamp   int64   `json:"timestamp"`
 	// `json...` makes the properties to parse correctly when using json.Marshal
 }
@@ -74,6 +75,7 @@ func SharePeerDataUpdate(data *PeerData) {
 			PeerID:      peerID,
 			Ip:          ip,
 			Reliability: reliability,
+			Connected:   data.Connected,
 			Timestamp:   time.Now().Unix(),
 		},
 	}
