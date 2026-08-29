@@ -61,7 +61,6 @@ func (ps *PeerStore) ReadFromFile(privateKey crypto.PrivKey) {
 		fmt.Println("[PEERSTORE] Using empty peerstore")
 		return
 	}
-
 	// TODO: implement verification/decryption
 	marshaledData := encryptedData
 
@@ -71,6 +70,9 @@ func (ps *PeerStore) ReadFromFile(privateKey crypto.PrivKey) {
 		fmt.Println("[PEERSTORE] PeerStore loading failed:", err)
 		fmt.Println("[PEERSTORE] Using empty peerstore")
 		return
+	}
+	for _, peerData := range ps.AllPeers {
+		peerData.Connected = false
 	}
 
 	fmt.Println("[PEERSTORE] Loaded peerstore")
@@ -83,6 +85,7 @@ func (ps *PeerStore) ActivatePeer(peerId string) (peerData *PeerData, isNew bool
 	// check if he is active already
 	peerData, ok := ps.ActivePeers[peerId]
 	if ok {
+		peerData.Connected = true
 		peerData.LastInteraction = time.Now()
 		SharePeerDataUpdate(peerData)
 		return peerData, false
@@ -92,9 +95,10 @@ func (ps *PeerStore) ActivatePeer(peerId string) (peerData *PeerData, isNew bool
 	peerData, ok = ps.AllPeers[peerId]
 	if ok {
 		// if yes, update his info and move him to active peer list
+		peerData.Connected = true
 		peerData.LastInteraction = time.Now()
-		SharePeerDataUpdate(peerData)
 		ps.ActivePeers[peerId] = peerData
+		SharePeerDataUpdate(peerData)
 		return peerData, false
 	}
 
@@ -106,12 +110,16 @@ func (ps *PeerStore) ActivatePeer(peerId string) (peerData *PeerData, isNew bool
 }
 
 func (ps *PeerStore) DeactivatePeer(peerId string) {
+	if peerData, ok := ps.ActivePeers[peerId]; ok {
+		peerData.Connected = false
+		SharePeerDataUpdate(peerData)
+	}
 	delete(ps.ActivePeers, peerId)
 }
 
 func (ps *PeerStore) CreateNewPeer(peerId string) *PeerData {
 
-	peerData := &PeerData{PeerID: peerId, LastInteraction: time.Now()}
+	peerData := &PeerData{PeerID: peerId, Connected: true, LastInteraction: time.Now()}
 	ps.ActivePeers[peerId] = peerData
 	ps.AllPeers[peerId] = peerData
 
