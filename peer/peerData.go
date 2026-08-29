@@ -11,6 +11,7 @@ type PeerData struct {
 	LastUsedIP            string
 	Version               string
 	Reliability           float64
+	Connected             bool
 	LastInteraction       time.Time
 	LastGoodPing          time.Time
 	LastMultiAddress      string
