@@ -1,6 +1,7 @@
 package database
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/go-redis/redis/v7"
@@ -9,11 +10,12 @@ import (
 var DBW *DBWrapper
 
 type DBWrapper struct {
-	DbAddress string
-	Rdb       *redis.Client
-	RdbGoPy   string
-	RdbPyGo   string
-	Ch        <-chan *redis.Message // this channel is only to be used by the slipsListener
+	DbAddress    string
+	Rdb          *redis.Client
+	RdbGoPy      string
+	RdbPyGo      string
+	SlipsVersion string
+	Ch           <-chan *redis.Message // this channel is only to be used by the slipsListener
 }
 
 func (dw *DBWrapper) InitDB() bool {
@@ -51,6 +53,20 @@ func (dw *DBWrapper) SendStringToChannel(message string) {
 	// sending the msg taken from the peer, to slips python module
 	//fmt.Println("[MESSAGE TO p2p_gopy]", message)
 	//fmt.Println("[pigeon -> p2p module]", message)
+	if dw.SlipsVersion != "" {
+		var payload map[string]interface{}
+		if err := json.Unmarshal([]byte(message), &payload); err != nil {
+			fmt.Println("[db] Could not version outgoing message -", err)
+		} else {
+			payload["version"] = dw.SlipsVersion
+			versionedMessage, err := json.Marshal(payload)
+			if err != nil {
+				fmt.Println("[db] Could not serialize versioned message -", err)
+			} else {
+				message = string(versionedMessage)
+			}
+		}
+	}
 	dw.Rdb.Publish(dw.RdbGoPy, message)
 }
 
