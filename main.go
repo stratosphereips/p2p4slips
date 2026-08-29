@@ -51,7 +51,7 @@ func main() {
 
 	// initialize database interface
 	database.DBW = &database.DBWrapper{DbAddress: cfg.RedisDb, RdbGoPy: cfg.RedisChannelGoPy,
-		RdbPyGo: cfg.RedisChannelPyGo}
+		RdbPyGo: cfg.RedisChannelPyGo, SlipsVersion: cfg.SlipsVersion}
 	var dbSuccess = database.DBW.InitDB()
 
 	if !dbSuccess {
