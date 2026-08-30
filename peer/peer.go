@@ -20,32 +20,36 @@ import (
 )
 
 type Peer struct {
-	host          host.Host
-	port          int
-	hostname      string
-	protocol      string
-	rendezVous    string
-	ctx           context.Context
-	peerstore     PeerStore
-	privKey       crypto.PrivKey
-	keyFile       string
-	resetKey      bool
-	peerstoreFile string
-	closing       bool
+	host            host.Host
+	port            int
+	hostname        string
+	protocol        string
+	rendezVous      string
+	ctx             context.Context
+	peerstore       PeerStore
+	privKey         crypto.PrivKey
+	keyFile         string
+	resetKey        bool
+	peerstoreFile   string
+	closing         bool
+	connectionTTL   time.Duration
+	flowGracePeriod time.Duration
 }
 
 func NewPeer(cfg *utils.Config) *Peer {
 	p := &Peer{
-		port:          cfg.ListenPort,
-		hostname:      cfg.ListenHost,
-		protocol:      cfg.ProtocolID,
-		rendezVous:    cfg.RendezvousString,
-		peerstore:     PeerStore{},
-		privKey:       nil,
-		keyFile:       cfg.KeyFile,
-		resetKey:      cfg.ResetKeys,
-		peerstoreFile: cfg.PeerstoreFile,
-		closing:       false,
+		port:            cfg.ListenPort,
+		hostname:        cfg.ListenHost,
+		protocol:        cfg.ProtocolID,
+		rendezVous:      cfg.RendezvousString,
+		peerstore:       PeerStore{},
+		privKey:         nil,
+		keyFile:         cfg.KeyFile,
+		resetKey:        cfg.ResetKeys,
+		peerstoreFile:   cfg.PeerstoreFile,
+		closing:         false,
+		connectionTTL:   time.Duration(cfg.ConnectionTTL) * time.Second,
+		flowGracePeriod: time.Duration(cfg.FlowGracePeriod) * time.Second,
 	}
 	return p
 }
@@ -53,6 +57,15 @@ func NewPeer(cfg *utils.Config) *Peer {
 func (p *Peer) PeerInit() error {
 	// prepare p2p host
 	p.p2pInit(p.keyFile, p.resetKey)
+
+	p.host.Network().Notify(&network.NotifyBundle{
+		ConnectedF: func(_ network.Network, connection network.Conn) {
+			p.authenticateConnection(connection)
+		},
+		DisconnectedF: func(_ network.Network, connection network.Conn) {
+			p.disconnectConnection(connection)
+		},
+	})
 
 	// link to a listener for new connections
 	p.host.SetStreamHandler(protocol.ID(p.protocol),
@@ -150,6 +163,60 @@ func (p *Peer) discoverPeers() error {
 	return nil
 }
 
+func multiaddrEndpoint(address multiaddr.Multiaddr) (string, string, bool) {
+	ip, err := address.ValueForProtocol(multiaddr.P_IP4)
+	if err != nil {
+		ip, err = address.ValueForProtocol(multiaddr.P_IP6)
+	}
+	if err != nil {
+		return "", "", false
+	}
+	port, err := address.ValueForProtocol(multiaddr.P_TCP)
+	if err != nil {
+		return "", "", false
+	}
+	return ip, port, true
+}
+
+func authenticatedConnection(connection network.Conn) (database.AuthenticatedConnection, bool) {
+	localIP, localPort, ok := multiaddrEndpoint(connection.LocalMultiaddr())
+	if !ok {
+		return database.AuthenticatedConnection{}, false
+	}
+	remoteIP, remotePort, ok := multiaddrEndpoint(connection.RemoteMultiaddr())
+	if !ok {
+		return database.AuthenticatedConnection{}, false
+	}
+	return database.AuthenticatedConnection{
+		PeerID:     connection.RemotePeer().Pretty(),
+		Protocol:   "tcp",
+		LocalIP:    localIP,
+		LocalPort:  localPort,
+		RemoteIP:   remoteIP,
+		RemotePort: remotePort,
+	}, true
+}
+
+func (p *Peer) authenticateConnection(connection network.Conn) {
+	record, ok := authenticatedConnection(connection)
+	if !ok {
+		return
+	}
+	database.DBW.StoreAuthenticatedConnection(record, p.connectionTTL)
+}
+
+func (p *Peer) refreshAuthenticatedConnection(connection network.Conn) {
+	p.authenticateConnection(connection)
+}
+
+func (p *Peer) disconnectConnection(connection network.Conn) {
+	record, ok := authenticatedConnection(connection)
+	if !ok {
+		return
+	}
+	database.DBW.RemoveAuthenticatedConnection(record, p.flowGracePeriod)
+}
+
 func (p *Peer) listener(stream network.Stream) {
 	defer p.closeStream(stream)
 
@@ -192,16 +259,19 @@ func (p *Peer) listener(stream network.Stream) {
 	}
 
 	if commands[0] == "hello" {
+		p.refreshAuthenticatedConnection(stream.Conn())
 		fmt.Println("[", remotePeer, "] New peer says hello to me")
 		p.handleHello(remotePeerData, stream, &commands)
 		return
 	} else if str == "ping" {
+		p.refreshAuthenticatedConnection(stream.Conn())
 		dt := time.Now()
 		//fmt.Println("[", remotePeer, "] says ping at ", dt.Format(time.UnixDate))
 		fmt.Printf("[ %s ] says ping at %s \n", remotePeer, dt.Format(time.UnixDate))
 		p.handlePing(remotePeerData, stream)
 		return
 	} else if str == "goodbye" {
+		p.refreshAuthenticatedConnection(stream.Conn())
 		fmt.Println("[", remotePeer, "] says goodbye")
 		p.handleGoodbye(remotePeerData)
 		return
@@ -211,6 +281,7 @@ func (p *Peer) listener(stream network.Stream) {
 		// log the received msg
 		rawDecodedText, err := base64.StdEncoding.DecodeString(str)
 		if err == nil {
+			p.refreshAuthenticatedConnection(stream.Conn())
 			fmt.Printf("Received from [ %s ] : %s\n", remotePeer, rawDecodedText)
 		}
 
@@ -479,6 +550,7 @@ func (p *Peer) sendMessageToStream(stream network.Stream, message string, timeou
 	}
 
 	// if timeout is zero, end here
+	p.refreshAuthenticatedConnection(stream.Conn())
 	if timeout == 0 {
 		return "", true
 	}

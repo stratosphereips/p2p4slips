@@ -3,6 +3,7 @@ package database
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/go-redis/redis/v7"
 )
@@ -89,4 +90,74 @@ func (dw *DBWrapper) subscribeToPyGo() bool {
 	//    _ = pubsub.Close()
 	//})
 	return true
+}
+
+type AuthenticatedConnection struct {
+	PeerID        string `json:"peer_id"`
+	Protocol      string `json:"protocol"`
+	LocalIP       string `json:"local_ip"`
+	LocalPort     string `json:"local_port"`
+	RemoteIP      string `json:"remote_ip"`
+	RemotePort    string `json:"remote_port"`
+	Authenticated bool   `json:"authenticated"`
+	Connected     bool   `json:"connected"`
+	LastSeen      int64  `json:"last_seen"`
+}
+
+const activeConnectionIndex = "p2p:active_connections"
+const activeConnectionPrefix = "p2p:active_connection:"
+const recentConnectionIndex = "p2p:recent_connections"
+const recentConnectionPrefix = "p2p:recent_connection:"
+
+func ConnectionID(connection AuthenticatedConnection) string {
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s", connection.PeerID,
+		connection.Protocol, connection.LocalIP, connection.LocalPort,
+		connection.RemoteIP, connection.RemotePort)
+}
+
+func (dw *DBWrapper) StoreAuthenticatedConnection(connection AuthenticatedConnection, ttl time.Duration) {
+	connection.Authenticated = true
+	connection.Connected = true
+	connection.LastSeen = time.Now().Unix()
+	connectionID := ConnectionID(connection)
+	payload, err := json.Marshal(connection)
+	if err != nil {
+		fmt.Println("[db] Could not serialize authenticated connection -", err)
+		return
+	}
+	dw.Rdb.SAdd(activeConnectionIndex, connectionID)
+	dw.Rdb.Set(activeConnectionPrefix+connectionID, payload, ttl)
+	dw.Rdb.SRem(recentConnectionIndex, connectionID)
+	dw.Rdb.Del(recentConnectionPrefix + connectionID)
+	dw.publishConnectionUpdate(connection)
+}
+
+func (dw *DBWrapper) RemoveAuthenticatedConnection(connection AuthenticatedConnection, grace time.Duration) {
+	connection.Authenticated = true
+	connection.Connected = false
+	connection.LastSeen = time.Now().Unix()
+	connectionID := ConnectionID(connection)
+	dw.Rdb.SRem(activeConnectionIndex, connectionID)
+	dw.Rdb.Del(activeConnectionPrefix + connectionID)
+	if grace > 0 {
+		payload, err := json.Marshal(connection)
+		if err == nil {
+			dw.Rdb.SAdd(recentConnectionIndex, connectionID)
+			dw.Rdb.Set(recentConnectionPrefix+connectionID, payload, grace)
+		}
+	}
+	dw.publishConnectionUpdate(connection)
+}
+
+func (dw *DBWrapper) publishConnectionUpdate(connection AuthenticatedConnection) {
+	message := map[string]interface{}{
+		"message_type":     "connection_update",
+		"message_contents": connection,
+	}
+	payload, err := json.Marshal(message)
+	if err != nil {
+		fmt.Println("[db] Could not serialize connection update -", err)
+		return
+	}
+	dw.SendStringToChannel(string(payload))
 }
