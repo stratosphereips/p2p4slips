@@ -18,8 +18,6 @@ type Config struct {
 	RedisChannelPyGo string
 	RedisChannelGoPy string
 	SlipsVersion     string
-	ConnectionTTL    int
-	FlowGracePeriod  int
 	RunTests         bool
 	ShowHelp         bool
 }
@@ -54,8 +52,6 @@ func ParseFlags() *Config {
 	flag.StringVar(&c.RedisChannelPyGo, "redis-channel-pygo", "p2p_pygo", "Channel for listening to commands")
 	flag.StringVar(&c.RedisChannelGoPy, "redis-channel-gopy", "p2p_gopy", "Channel for sending data to slips")
 	flag.StringVar(&c.SlipsVersion, "slips-version", "", "Slips version added to messages sent to Python")
-	flag.IntVar(&c.ConnectionTTL, "connection-ttl", 30, "authenticated connection TTL in seconds")
-	flag.IntVar(&c.FlowGracePeriod, "flow-grace-period", 3, "post-disconnect flow classification grace in seconds")
 
 	flag.BoolVar(&c.ShowHelp, "help", false, "Display Help")
 
