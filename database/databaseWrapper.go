@@ -3,7 +3,6 @@ package database
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/go-redis/redis/v7"
 )
@@ -93,66 +92,49 @@ func (dw *DBWrapper) subscribeToPyGo() bool {
 }
 
 type AuthenticatedConnection struct {
-	PeerID        string `json:"peer_id"`
-	Protocol      string `json:"protocol"`
-	LocalIP       string `json:"local_ip"`
-	LocalPort     string `json:"local_port"`
-	RemoteIP      string `json:"remote_ip"`
-	RemotePort    string `json:"remote_port"`
-	Authenticated bool   `json:"authenticated"`
-	Connected     bool   `json:"connected"`
-	LastSeen      int64  `json:"last_seen"`
+	PeerID     string `json:"peer_id"`
+	Protocol   string `json:"protocol"`
+	LocalIP    string `json:"local_ip"`
+	LocalPort  string `json:"local_port"`
+	RemoteIP   string `json:"remote_ip"`
+	RemotePort string `json:"remote_port"`
 }
 
-const activeConnectionIndex = "p2p:active_connections"
-const activeConnectionPrefix = "p2p:active_connection:"
-const recentConnectionIndex = "p2p:recent_connections"
-const recentConnectionPrefix = "p2p:recent_connection:"
+// connectionsSet is the single redis set slips reads to know which
+// exact tuples are Slips's own authenticated P2P connections.
+const connectionsSet = "p2p:connections"
 
-func ConnectionID(connection AuthenticatedConnection) string {
-	return fmt.Sprintf("%s|%s|%s|%s|%s|%s", connection.PeerID,
+// ConnectionEntry is the member stored in connectionsSet, matching the
+// 5-tuple slips uses to match a flow: protocol|local_ip|local_port|
+// remote_ip|remote_port.
+func ConnectionEntry(connection AuthenticatedConnection) string {
+	return fmt.Sprintf("%s|%s|%s|%s|%s",
 		connection.Protocol, connection.LocalIP, connection.LocalPort,
 		connection.RemoteIP, connection.RemotePort)
 }
 
-func (dw *DBWrapper) StoreAuthenticatedConnection(connection AuthenticatedConnection, ttl time.Duration) {
-	connection.Authenticated = true
-	connection.Connected = true
-	connection.LastSeen = time.Now().Unix()
-	connectionID := ConnectionID(connection)
-	payload, err := json.Marshal(connection)
-	if err != nil {
-		fmt.Println("[db] Could not serialize authenticated connection -", err)
-		return
-	}
-	dw.Rdb.SAdd(activeConnectionIndex, connectionID)
-	dw.Rdb.Set(activeConnectionPrefix+connectionID, payload, ttl)
-	dw.Rdb.SRem(recentConnectionIndex, connectionID)
-	dw.Rdb.Del(recentConnectionPrefix + connectionID)
-	dw.publishConnectionUpdate(connection)
+func (dw *DBWrapper) StoreAuthenticatedConnection(connection AuthenticatedConnection) {
+	dw.Rdb.SAdd(connectionsSet, ConnectionEntry(connection))
+	dw.publishConnectionUpdate(connection, true)
 }
 
-func (dw *DBWrapper) RemoveAuthenticatedConnection(connection AuthenticatedConnection, grace time.Duration) {
-	connection.Authenticated = true
-	connection.Connected = false
-	connection.LastSeen = time.Now().Unix()
-	connectionID := ConnectionID(connection)
-	dw.Rdb.SRem(activeConnectionIndex, connectionID)
-	dw.Rdb.Del(activeConnectionPrefix + connectionID)
-	if grace > 0 {
-		payload, err := json.Marshal(connection)
-		if err == nil {
-			dw.Rdb.SAdd(recentConnectionIndex, connectionID)
-			dw.Rdb.Set(recentConnectionPrefix+connectionID, payload, grace)
-		}
-	}
-	dw.publishConnectionUpdate(connection)
+func (dw *DBWrapper) RemoveAuthenticatedConnection(connection AuthenticatedConnection) {
+	dw.Rdb.SRem(connectionsSet, ConnectionEntry(connection))
+	dw.publishConnectionUpdate(connection, false)
 }
 
-func (dw *DBWrapper) publishConnectionUpdate(connection AuthenticatedConnection) {
+func (dw *DBWrapper) publishConnectionUpdate(connection AuthenticatedConnection, connected bool) {
 	message := map[string]interface{}{
-		"message_type":     "connection_update",
-		"message_contents": connection,
+		"message_type": "connection_update",
+		"message_contents": map[string]interface{}{
+			"peer_id":     connection.PeerID,
+			"protocol":    connection.Protocol,
+			"local_ip":    connection.LocalIP,
+			"local_port":  connection.LocalPort,
+			"remote_ip":   connection.RemoteIP,
+			"remote_port": connection.RemotePort,
+			"connected":   connected,
+		},
 	}
 	payload, err := json.Marshal(message)
 	if err != nil {
