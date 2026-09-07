@@ -20,36 +20,32 @@ import (
 )
 
 type Peer struct {
-	host            host.Host
-	port            int
-	hostname        string
-	protocol        string
-	rendezVous      string
-	ctx             context.Context
-	peerstore       PeerStore
-	privKey         crypto.PrivKey
-	keyFile         string
-	resetKey        bool
-	peerstoreFile   string
-	closing         bool
-	connectionTTL   time.Duration
-	flowGracePeriod time.Duration
+	host          host.Host
+	port          int
+	hostname      string
+	protocol      string
+	rendezVous    string
+	ctx           context.Context
+	peerstore     PeerStore
+	privKey       crypto.PrivKey
+	keyFile       string
+	resetKey      bool
+	peerstoreFile string
+	closing       bool
 }
 
 func NewPeer(cfg *utils.Config) *Peer {
 	p := &Peer{
-		port:            cfg.ListenPort,
-		hostname:        cfg.ListenHost,
-		protocol:        cfg.ProtocolID,
-		rendezVous:      cfg.RendezvousString,
-		peerstore:       PeerStore{},
-		privKey:         nil,
-		keyFile:         cfg.KeyFile,
-		resetKey:        cfg.ResetKeys,
-		peerstoreFile:   cfg.PeerstoreFile,
-		closing:         false,
-		connectionTTL:   time.Duration(cfg.ConnectionTTL) * time.Second,
-		flowGracePeriod: time.Duration(cfg.FlowGracePeriod) * time.Second,
+		port:          cfg.ListenPort,
+		hostname:      cfg.ListenHost,
+		protocol:      cfg.ProtocolID,
+		rendezVous:    cfg.RendezvousString,
+		peerstore:     PeerStore{},
+		privKey:       nil,
+		keyFile:       cfg.KeyFile,
+		resetKey:      cfg.ResetKeys,
+		peerstoreFile: cfg.PeerstoreFile,
+		closing:       false,
 	}
 	return p
 }
@@ -202,7 +198,7 @@ func (p *Peer) authenticateConnection(connection network.Conn) {
 	if !ok {
 		return
 	}
-	database.DBW.StoreAuthenticatedConnection(record, p.connectionTTL)
+	database.DBW.StoreAuthenticatedConnection(record)
 }
 
 func (p *Peer) refreshAuthenticatedConnection(connection network.Conn) {
@@ -214,7 +210,7 @@ func (p *Peer) disconnectConnection(connection network.Conn) {
 	if !ok {
 		return
 	}
-	database.DBW.RemoveAuthenticatedConnection(record, p.flowGracePeriod)
+	database.DBW.RemoveAuthenticatedConnection(record)
 }
 
 func (p *Peer) listener(stream network.Stream) {
