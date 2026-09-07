@@ -7,7 +7,7 @@ This program is a demo for the P2P part of SLIPS. It enables sharing network inf
 ```
 go get -v -d ./...
 
-go build
+go build -buildvcs=false
 ```
 
 ## Demo usage
