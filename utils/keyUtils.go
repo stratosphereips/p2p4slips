@@ -74,8 +74,7 @@ func SaveKey(keyFile string, prvKey crypto.PrivKey) {
 	}
 
 	// save new key to file
-	// TODO: change file permissions
-	err = ioutil.WriteFile(keyFile, marshaledKey, 0777)
+	err = ioutil.WriteFile(keyFile, marshaledKey, 0600)
 	if err != nil {
 		fmt.Println("[KEY UTIL] Key saving failed:", err)
 		return
