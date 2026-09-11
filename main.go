@@ -32,9 +32,15 @@ func main() {
 		os.Exit(0)
 	}
 
+	redisPassword, err := database.ReadRequirepass(cfg.RedisAuthConf)
+	if err != nil {
+		fmt.Println("[PEER] Could not read the redis password -", err)
+		os.Exit(1)
+	}
+
 	if cfg.RunTests {
 		fmt.Println("Running tests...")
-		tests.RunTests("127.0.0.1", "foo")
+		tests.RunTests("127.0.0.1", redisPassword, "foo")
 		os.Exit(0)
 	}
 	fmt.Printf("[DEBUGGG] LISTENING on IP: %s\n", cfg.ListenHost)
@@ -50,8 +56,8 @@ func main() {
 	fmt.Printf("[MAIN] Pigeon is starting on TCP Port %d\n", cfg.ListenPort)
 
 	// initialize database interface
-	database.DBW = &database.DBWrapper{DbAddress: cfg.RedisDb, RdbGoPy: cfg.RedisChannelGoPy,
-		RdbPyGo: cfg.RedisChannelPyGo, SlipsVersion: cfg.SlipsVersion}
+	database.DBW = &database.DBWrapper{DbAddress: cfg.RedisDb, Password: redisPassword,
+		RdbGoPy: cfg.RedisChannelGoPy, RdbPyGo: cfg.RedisChannelPyGo, SlipsVersion: cfg.SlipsVersion}
 	var dbSuccess = database.DBW.InitDB()
 
 	if !dbSuccess {
@@ -63,7 +69,7 @@ func main() {
 	peer := peer.NewPeer(cfg)
 	// defer means do it at the	end of the function
 	defer peer.PeerShutdown()
-	err := peer.PeerInit()
+	err = peer.PeerInit()
 
 	if err != nil {
 		fmt.Println("[PEER] Initializing peer failed")
@@ -76,7 +82,7 @@ func main() {
 
 	// run tests
 	// TODO: remove tests for production
-	go tests.RunTests(cfg.RedisDb, cfg.RedisChannelPyGo)
+	go tests.RunTests(cfg.RedisDb, redisPassword, cfg.RedisChannelPyGo)
 
 	// neatly exit when termination signal is received
 	ch := make(chan os.Signal, 1)

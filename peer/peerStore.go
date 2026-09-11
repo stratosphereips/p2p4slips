@@ -3,11 +3,11 @@ package peer
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 )
 
 type PeerStore struct {
@@ -36,7 +36,7 @@ func (ps *PeerStore) SaveToFile(key crypto.PrivKey) error {
 	//encryptedData, err := rsa.EncryptPKCS1v15(r, &key, marshaledPeerData)
 	encryptedData := marshaledPeerData
 
-	err = ioutil.WriteFile(ps.SaveFile, encryptedData, 0600)
+	err = os.WriteFile(ps.SaveFile, encryptedData, 0600)
 	if err != nil {
 		fmt.Println("[PEERSTORE] PeerStore saving failed:", err)
 		return err
@@ -54,7 +54,7 @@ func (ps *PeerStore) ReadFromFile(privateKey crypto.PrivKey) {
 		return
 	}
 
-	encryptedData, err := ioutil.ReadFile(ps.SaveFile)
+	encryptedData, err := os.ReadFile(ps.SaveFile)
 
 	if err != nil {
 		fmt.Println("[PEERSTORE] PeerStore loading failed:", err)

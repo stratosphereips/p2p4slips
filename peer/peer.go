@@ -5,18 +5,21 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	libp2ppeer "github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
-	"github.com/multiformats/go-multiaddr"
-	"github.com/stratosphereips/p2p4slips/database"
-	"github.com/stratosphereips/p2p4slips/utils"
 	"io"
 	"strings"
 	"time"
+
+	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/stratosphereips/p2p4slips/database"
+	"github.com/stratosphereips/p2p4slips/utils"
 )
 
 type Peer struct {
@@ -32,6 +35,8 @@ type Peer struct {
 	resetKey      bool
 	peerstoreFile string
 	closing       bool
+	// mdns is the running peer discovery service, closed on shutdown
+	mdns io.Closer
 }
 
 func NewPeer(cfg *utils.Config) *Peer {
@@ -52,7 +57,9 @@ func NewPeer(cfg *utils.Config) *Peer {
 
 func (p *Peer) PeerInit() error {
 	// prepare p2p host
-	p.p2pInit(p.keyFile, p.resetKey)
+	if err := p.p2pInit(p.keyFile, p.resetKey); err != nil {
+		return err
+	}
 
 	p.host.Network().Notify(&network.NotifyBundle{
 		ConnectedF: func(_ network.Network, connection network.Conn) {
@@ -82,8 +89,27 @@ func (p *Peer) PeerInit() error {
 }
 
 func (p *Peer) PeerShutdown() {
-	p.host.Close()
+	p.stopDiscovery()
+	if p.host == nil {
+		// host creation failed, nothing to close
+		return
+	}
+	if err := p.host.Close(); err != nil {
+		fmt.Println("[PEER] Error closing host -", err)
+	}
 	fmt.Printf("[PEER] Closed port %d\n", p.port)
+}
+
+// stopDiscovery stops the mDNS service so it no longer announces this peer
+// or delivers newly found peers. Safe to call more than once.
+func (p *Peer) stopDiscovery() {
+	if p.mdns == nil {
+		return
+	}
+	if err := p.mdns.Close(); err != nil {
+		fmt.Println("[PEER] Error stopping peer discovery -", err)
+	}
+	p.mdns = nil
 }
 
 func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
@@ -93,16 +119,27 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 
 	p.privKey = prvKey
 
-	// 0.0.0.0 will listen on any interface device.
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", p.hostname, p.port))
+	if p.hostname == "" {
+		// 0.0.0.0 will listen on any interface device.
+		p.hostname = "0.0.0.0"
+	}
+	sourceMultiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", p.hostname, p.port))
+	if err != nil {
+		fmt.Println("[PEER] Invalid listen address -", err)
+		return err
+	}
 
 	// libp2p.New constructs a new libp2p Host.
-	// Other options can be added here.
-	var err error
+	// Pigeon only ever talks over plain TCP on the local network, so the
+	// host is limited to the TCP transport: slips records every
+	// authenticated peer connection as a TCP 5-tuple, and relays, QUIC and
+	// the other default transports would only add listeners it can't track.
 	p.host, err = libp2p.New(
-		p.ctx,
 		libp2p.ListenAddrs(sourceMultiAddr),
 		libp2p.Identity(prvKey),
+		libp2p.Transport(tcp.NewTCPTransport),
+		libp2p.DisableRelay(),
+		libp2p.DisableMetrics(),
 	)
 
 	if err != nil {
@@ -110,7 +147,7 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 		return err
 	}
 
-	multiAddress := fmt.Sprintf("/ip4/%s/tcp/%v/p2p/%s", p.hostname, p.port, p.host.ID().Pretty())
+	multiAddress := fmt.Sprintf("/ip4/%s/tcp/%v/p2p/%s", p.hostname, p.port, p.host.ID().String())
 	fmt.Println("\n[*] Your Multiaddress Is: ", multiAddress)
 	database.DBW.SaveMultiAddress(multiAddress)
 	return nil
@@ -119,19 +156,26 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 func (p *Peer) discoverPeers() error {
 	fmt.Println("Looking for peers")
 
-	peerChan, err := utils.InitMDNS(p.ctx, p.host, p.rendezVous)
+	peerChan, mdnsService, err := utils.InitMDNS(p.host, p.rendezVous)
 
 	if err != nil {
 		return err
 	}
+	p.mdns = mdnsService
 	go func() {
 		for {
 			if p.closing {
 				return
 			}
 			peerAddress := <-peerChan // will block until we discover a peerAddress
-			peerId := peerAddress.ID.Pretty()
+			peerId := peerAddress.ID.String()
 			fmt.Println(">>> Found peerAddress:", peerId)
+
+			if peerAddress.ID == p.host.ID() || len(peerAddress.Addrs) == 0 {
+				// mDNS can report our own announcement, or a peer without
+				// a usable address; neither can be contacted
+				continue
+			}
 
 			peerData, isNew := p.peerstore.ActivatePeer(peerId)
 
@@ -143,7 +187,8 @@ func (p *Peer) discoverPeers() error {
 					fmt.Println("Connection failed:", err)
 					fmt.Println("Please make sure that the port of this Node is not used by other processes")
 					peerData.AddBasicInteraction(0)
-					return
+					// keep listening for other peers instead of ending discovery
+					continue
 				}
 
 				remoteMA := fmt.Sprintf("%s/p2p/%s", peerAddress.Addrs[0], peerId)
@@ -184,7 +229,7 @@ func authenticatedConnection(connection network.Conn) (database.AuthenticatedCon
 		return database.AuthenticatedConnection{}, false
 	}
 	return database.AuthenticatedConnection{
-		PeerID:     connection.RemotePeer().Pretty(),
+		PeerID:     connection.RemotePeer().String(),
 		Protocol:   "tcp",
 		LocalIP:    localIP,
 		LocalPort:  localPort,
@@ -217,7 +262,7 @@ func (p *Peer) listener(stream network.Stream) {
 	defer p.closeStream(stream)
 
 	remotePeer := stream.Conn().RemotePeer()
-	remotePeerStr := remotePeer.Pretty()
+	remotePeerStr := remotePeer.String()
 	remoteMA := fmt.Sprintf("%s/p2p/%s", stream.Conn().RemoteMultiaddr(), remotePeerStr)
 
 	remotePeerData, _ := p.peerstore.ActivatePeer(remotePeerStr)
@@ -429,9 +474,12 @@ func (p *Peer) Close() {
 	// wait till the message is sent, otherwise the host is closed too early and sending fails
 	time.Sleep(1 * time.Second)
 
-	p.peerstore.SaveToFile(p.privKey)
+	if err := p.peerstore.SaveToFile(p.privKey); err != nil {
+		fmt.Println("[PEER] Peerstore was not saved -", err)
+	}
 
 	// shut the node down
+	p.stopDiscovery()
 	if err := p.host.Close(); err != nil {
 		panic(err)
 	}
@@ -517,6 +565,10 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
 		return nil
 	}
 
+	// make sure the host knows how to reach the peer even if the original
+	// connection was dropped, so the stream can dial it again
+	p.host.Peerstore().AddAddrs(remotePeer.ID, remotePeer.Addrs, peerstore.TempAddrTTL)
+
 	// open stream
 	stream, err := p.host.NewStream(p.ctx, remotePeer.ID, protocol.ID(p.protocol))
 	if err != nil {
@@ -551,8 +603,10 @@ func (p *Peer) sendMessageToStream(stream network.Stream, message string, timeou
 		return "", true
 	}
 
-	// collect reply from the stream to a channel
-	output := make(chan string)
+	// collect the reply from the stream to a channel. Room for one message,
+	// so the reader never blocks (and leaks) when this function has
+	// already given up waiting
+	output := make(chan string, 1)
 	go rw2channel(output, rw)
 	data := ""
 
@@ -587,19 +641,21 @@ func send2rw(rw *bufio.ReadWriter, message string) bool {
 	return true
 }
 
-// Read messages from read writer and direct them to a channel
+// Read one reply line from the read writer and direct it to the channel.
+// Every exchange with a peer is one message and one reply, so the reader
+// stops after the first line; reading on would only hit the stream reset
+// that closing the stream causes. The channel must have room for one
+// message so the reader never blocks after the caller stopped waiting.
 func rw2channel(input chan string, rw *bufio.ReadWriter) {
-	for {
-		result, err := rw.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				return
-			}
-			fmt.Println("Error while reading msg from peer: ", err)
-		}
-
-		input <- result
+	result, err := rw.ReadString('\n')
+	if err != nil && err != io.EOF {
+		fmt.Println("Error while reading msg from peer: ", err)
 	}
+	if result == "" {
+		// nothing usable arrived, let the caller time out
+		return
+	}
+	input <- result
 }
 
 // close the stream nicely (no return value, since we don't care if it crashed - it is closed either way)

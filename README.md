@@ -4,11 +4,15 @@ This program is a demo for the P2P part of SLIPS. It enables sharing network inf
 
 ## How to build this example?
 
-```
-go get -v -d ./...
+You need Go 1.21 or newer: `go.mod` pins the exact toolchain (see its
+`toolchain` line) and Go downloads it on the first build.
 
+```
 go build -buildvcs=false
 ```
+
+`go build` also fetches the module dependencies (go-libp2p, go-redis,
+go-multiaddr) listed in `go.mod`.
 
 ## Demo usage
 

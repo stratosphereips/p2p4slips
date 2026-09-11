@@ -14,6 +14,7 @@ type Config struct {
 	ListenPort       int
 	ResetKeys        bool
 	RedisDb          string
+	RedisAuthConf    string
 	RedisDelete      bool
 	RedisChannelPyGo string
 	RedisChannelGoPy string
@@ -27,7 +28,7 @@ func ParseFlags() *Config {
 
 	flag.StringVar(&c.RendezvousString, "rendezvous", "slips", "Unique string to identify group "+
 		"of nodes. Share this with your friends to let them connect with you")
-	flag.StringVar(&c.ListenHost, "host", "", "The bootstrap node host listen address\n")
+	flag.StringVar(&c.ListenHost, "host", "0.0.0.0", "IP address to listen on (0.0.0.0 listens on every interface)")
 	flag.StringVar(&c.ProtocolID, "pid", "/slips/1.0", "Sets a protocol id for stream headers")
 	flag.IntVar(&c.ListenPort, "port", 4001, "node listen port")
 
@@ -44,6 +45,9 @@ func ParseFlags() *Config {
 		"channels for convenient running of more peers on one host. Set to false to keep filenames unchanged")
 
 	flag.StringVar(&c.RedisDb, "redis-db", "localhost:6379", "Remote redis database")
+	flag.StringVar(&c.RedisAuthConf, "redis-auth-conf", "", "Redis conf file holding the "+
+		"'requirepass <password>' line slips starts redis-server with (permanent/redis_auth.conf). "+
+		"Leave empty when redis has no password")
 
 	flag.BoolVar(&c.RedisDelete, "redis-delete", false, "Delete database when starting the program")
 
