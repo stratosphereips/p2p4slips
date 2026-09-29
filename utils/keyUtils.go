@@ -3,9 +3,9 @@ package utils
 import (
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
+	"os"
 
-	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p/core/crypto"
 )
 
 func LoadKey(keyFile string, keyReset bool) crypto.PrivKey {
@@ -27,7 +27,8 @@ func LoadKey(keyFile string, keyReset bool) crypto.PrivKey {
 	}
 
 	// load from file
-	data, err := ioutil.ReadFile(keyFile)
+	// #nosec G304 -- keyFile is the -key-file flag chosen by slips, not remote input
+	data, err := os.ReadFile(keyFile)
 	if err != nil {
 		fmt.Printf("[KEY UTIL] Key could not be read from file '%s' - %s\n", keyFile, err)
 		prvKey = SafeKeyGen()
@@ -74,8 +75,7 @@ func SaveKey(keyFile string, prvKey crypto.PrivKey) {
 	}
 
 	// save new key to file
-	// TODO: change file permissions
-	err = ioutil.WriteFile(keyFile, marshaledKey, 0777)
+	err = os.WriteFile(keyFile, marshaledKey, 0600)
 	if err != nil {
 		fmt.Println("[KEY UTIL] Key saving failed:", err)
 		return

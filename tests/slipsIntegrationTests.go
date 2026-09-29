@@ -2,25 +2,20 @@ package tests
 
 import (
 	"fmt"
-	"github.com/go-redis/redis/v7"
 	"time"
+
+	"github.com/stratosphereips/p2p4slips/database"
 )
 
-func RunTests(dbAddress string, pyGoChannel string){
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     dbAddress,
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
-
-	pongErr := rdb.Ping().Err()
-
-	if pongErr != nil {
-		fmt.Println("[PEER] Database connection failed -", pongErr)
+func RunTests(dbAddress string, redisPassword string, pyGoChannel string) {
+	rdb, err := database.NewRedisClient(dbAddress, redisPassword)
+	if err != nil {
+		fmt.Println("[PEER] Database connection failed -", err)
 		return
 	}
+	defer rdb.Close()
 
-	if pyGoChannel != "p2p_pygo6667"{
+	if pyGoChannel != "p2p_pygo6667" {
 		return
 	}
 
