@@ -16,6 +16,8 @@ import (
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
+	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stratosphereips/p2p4slips/database"
@@ -37,6 +39,16 @@ type Peer struct {
 	closing       bool
 	// mdns is the running peer discovery service, closed on shutdown
 	mdns io.Closer
+}
+
+// newNoiseTransport creates Noise without early muxer negotiation for older
+// Slips Pigeon peers that negotiate their stream muxer after Noise.
+func newNoiseTransport(
+	id protocol.ID,
+	privateKey crypto.PrivKey,
+	_ []tptu.StreamMuxer,
+) (*noise.Transport, error) {
+	return noise.New(id, privateKey, nil)
 }
 
 func NewPeer(cfg *utils.Config) *Peer {
@@ -138,6 +150,7 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 		libp2p.ListenAddrs(sourceMultiAddr),
 		libp2p.Identity(prvKey),
 		libp2p.Transport(tcp.NewTCPTransport),
+		libp2p.Security(noise.ID, newNoiseTransport),
 		libp2p.DisableRelay(),
 		libp2p.DisableMetrics(),
 	)
