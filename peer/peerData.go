@@ -3,7 +3,10 @@ package peer
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/stratosphereips/p2p4slips/database"
 )
 
 type PeerData struct {
@@ -17,6 +20,8 @@ type PeerData struct {
 	LastMultiAddress      string
 	BasicInteractions     []float64
 	BasicInteractionTimes []time.Time
+	LastNetworkID         string
+	interactionMu         sync.Mutex
 	// TODO: move all manipulation to getters and setters, which notify slips
 
 }
@@ -99,6 +104,33 @@ func (pd *PeerData) CanHePingMe() bool {
 }
 
 func (pd *PeerData) AddBasicInteraction(rating float64) {
+	if pd.addBasicInteraction(rating, database.DBW.NetworkForPeer(pd.LastUsedIP)) {
+		SharePeerDataUpdate(pd)
+	}
+}
+
+// ObserveNetwork records the local network of an authenticated peer connection.
+func (pd *PeerData) ObserveNetwork() {
+	networkID := database.DBW.NetworkForPeer(pd.LastUsedIP)
+	if networkID == "" {
+		return
+	}
+	pd.interactionMu.Lock()
+	defer pd.interactionMu.Unlock()
+	pd.LastNetworkID = networkID
+}
+
+// addBasicInteraction records rating only while the peer belongs to networkID.
+// Returns whether reliability changed; successful ratings establish membership.
+func (pd *PeerData) addBasicInteraction(rating float64, networkID string) bool {
+	pd.interactionMu.Lock()
+	defer pd.interactionMu.Unlock()
+	if networkID == "" || (rating <= 0 && networkID != pd.LastNetworkID) {
+		return false
+	}
+	if rating > 0 {
+		pd.LastNetworkID = networkID
+	}
 	// TODO change ping to include latency in score
 	timestamp := time.Now()
 	pd.BasicInteractions = append(pd.BasicInteractions, rating)
@@ -106,8 +138,8 @@ func (pd *PeerData) AddBasicInteraction(rating float64) {
 
 	reliability := ComputeReliability(pd.BasicInteractions)
 	if reliability == pd.Reliability {
-		return
+		return false
 	}
 	pd.Reliability = reliability
-	SharePeerDataUpdate(pd)
+	return true
 }

@@ -294,6 +294,7 @@ func (p *Peer) listener(stream network.Stream) {
 
 	remotePeerData, _ := p.peerstore.ActivatePeer(remotePeerStr)
 	remotePeerData.SetMultiaddr(remoteMA)
+	remotePeerData.ObserveNetwork()
 
 	// Create a buffer stream for non blocking read and write.
 	reader := bufio.NewReader(stream)
@@ -602,6 +603,7 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
 		fmt.Println("[OPEN STREAM] Opening stream failed")
 		return nil
 	}
+	peerData.ObserveNetwork()
 
 	return stream
 }
