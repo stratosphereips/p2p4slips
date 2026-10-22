@@ -59,7 +59,19 @@ func networkForPeer(states map[string]string, addresses map[string][]net.IP, pee
 		if json.Unmarshal([]byte(encoded), &state) != nil || !state.Connected {
 			continue
 		}
-		mac, err := net.ParseMAC(state.GatewayMAC)
+		gatewayMAC := strings.TrimSpace(state.GatewayMAC)
+		mac, err := net.ParseMAC(gatewayMAC)
+		if err != nil {
+			octets := strings.Split(gatewayMAC, ":")
+			if len(octets) == 6 {
+				for index, octet := range octets {
+					if len(octet) == 1 {
+						octets[index] = "0" + octet
+					}
+				}
+				mac, err = net.ParseMAC(strings.Join(octets, ":"))
+			}
+		}
 		if err != nil || state.LocalNetwork == "" {
 			continue
 		}

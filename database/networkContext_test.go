@@ -16,6 +16,10 @@ func TestNetworkForPeerRequiresLiveLocalMembership(t *testing.T) {
 		want       string
 	}{
 		{"same network", "192.168.1.170", "192.168.1.163", true, "00:11:22:33:44:55", "00:11:22:33:44:55|192.168.1.0/24"},
+		{"macOS gateway", "192.168.1.170", "192.168.1.163", true, "d8:58:d7:1:ff:e1", "d8:58:d7:01:ff:e1|192.168.1.0/24"},
+		{"macOS gateway multiple short octets", "192.168.1.170", "192.168.1.163", true, "0:9:f:9:92:2a", "00:09:0f:09:92:2a|192.168.1.0/24"},
+		{"invalid gateway octet", "192.168.1.170", "192.168.1.163", true, "d8:58:d7:zz:ff:e1", ""},
+		{"invalid gateway length", "192.168.1.170", "192.168.1.163", true, "d8:58:d7:1:ff", ""},
 		{"different subnet", "10.0.0.170", "192.168.1.163", true, "00:11:22:33:44:55", ""},
 		{"interface disconnected", "192.168.1.170", "192.168.1.163", false, "00:11:22:33:44:55", ""},
 		{"stale interface IP", "192.168.1.170", "10.0.0.163", true, "00:11:22:33:44:55", ""},
