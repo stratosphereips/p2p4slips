@@ -28,3 +28,7 @@ You will see the peers start and contact each other.
 ## Usage with SLIPS
 
 This program is called from the slips P2P module. Save files for Peer storage and for encryption keys can be set up to use the same identity after restart.
+
+Pigeon uses the Noise security protocol and negotiates the stream muxer after
+the secure handshake. This keeps it interoperable with older Slips Pigeon
+builds that do not support early muxer negotiation inside Noise.

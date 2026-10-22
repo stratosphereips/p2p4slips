@@ -16,6 +16,8 @@ import (
 	libp2ppeer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
+	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stratosphereips/p2p4slips/database"
@@ -39,6 +41,16 @@ type Peer struct {
 	mdns io.Closer
 }
 
+// newNoiseTransport creates Noise without early muxer negotiation for older
+// Slips Pigeon peers that negotiate their stream muxer after Noise.
+func newNoiseTransport(
+	id protocol.ID,
+	privateKey crypto.PrivKey,
+	_ []tptu.StreamMuxer,
+) (*noise.Transport, error) {
+	return noise.New(id, privateKey, nil)
+}
+
 func NewPeer(cfg *utils.Config) *Peer {
 	p := &Peer{
 		port:          cfg.ListenPort,
@@ -55,7 +67,7 @@ func NewPeer(cfg *utils.Config) *Peer {
 	return p
 }
 
-func (p *Peer) PeerInit() error {
+func (p *Peer) PeerInit(bootstrapPeers string) error {
 	// prepare p2p host
 	if err := p.p2pInit(p.keyFile, p.resetKey); err != nil {
 		return err
@@ -79,7 +91,7 @@ func (p *Peer) PeerInit() error {
 	p.peerstore.ReadFromFile(p.privKey)
 
 	// run peer discovery in the background
-	err := p.discoverPeers()
+	err := p.discoverPeers(bootstrapPeers)
 	if err != nil {
 		return err
 	}
@@ -138,6 +150,7 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 		libp2p.ListenAddrs(sourceMultiAddr),
 		libp2p.Identity(prvKey),
 		libp2p.Transport(tcp.NewTCPTransport),
+		libp2p.Security(noise.ID, newNoiseTransport),
 		libp2p.DisableRelay(),
 		libp2p.DisableMetrics(),
 	)
@@ -153,7 +166,7 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 	return nil
 }
 
-func (p *Peer) discoverPeers() error {
+func (p *Peer) discoverPeers(bootstrapPeers string) error {
 	fmt.Println("Looking for peers")
 
 	peerChan, mdnsService, err := utils.InitMDNS(p.host, p.rendezVous)
@@ -177,30 +190,44 @@ func (p *Peer) discoverPeers() error {
 				continue
 			}
 
-			peerData, isNew := p.peerstore.ActivatePeer(peerId)
-
-			if isNew {
-				// unknown peer
-				fmt.Println("This is a new node, contacting him...")
-
-				if err := p.host.Connect(p.ctx, peerAddress); err != nil {
-					fmt.Println("Connection failed:", err)
-					fmt.Println("Please make sure that the port of this Node is not used by other processes")
-					peerData.AddBasicInteraction(0)
-					// keep listening for other peers instead of ending discovery
+			wasActive := p.peerstore.IsActivePeer(peerId) != nil
+			if p.host.Network().Connectedness(peerAddress.ID) != network.Connected {
+				// Peerstore entries survive restarts, but their old TCP
+				// connections do not. Redial known peers after discovery.
+				ctx, cancel := context.WithTimeout(p.ctx, 30*time.Second)
+				err := p.host.Connect(ctx, peerAddress)
+				cancel()
+				if err != nil {
+					fmt.Printf("[PEER] Connection to %s failed: %s\n", peerId, err)
 					continue
 				}
+			}
 
-				remoteMA := fmt.Sprintf("%s/p2p/%s", peerAddress.Addrs[0], peerId)
-				peerData.SetMultiaddr(remoteMA)
-
+			peerData, _ := p.peerstore.ActivatePeer(peerId)
+			remoteMA := fmt.Sprintf("%s/p2p/%s", peerAddress.Addrs[0], peerId)
+			peerData.SetMultiaddr(remoteMA)
+			if !wasActive {
 				go p.sayHello(peerData)
-
-				// sleep, because a new peer might be found twice, and we want to save him before the second message is read
-				time.Sleep(500 * time.Millisecond)
 			}
 		}
 	}()
+	for _, address := range strings.Split(bootstrapPeers, ",") {
+		address = strings.TrimSpace(address)
+		if address == "" {
+			continue
+		}
+		multiAddress, parseErr := multiaddr.NewMultiaddr(address)
+		if parseErr != nil {
+			fmt.Printf("[BOOTSTRAP] Invalid peer address %q: %s\n", address, parseErr)
+			continue
+		}
+		peerAddress, parseErr := libp2ppeer.AddrInfoFromP2pAddr(multiAddress)
+		if parseErr != nil {
+			fmt.Printf("[BOOTSTRAP] Invalid peer identity in %q: %s\n", address, parseErr)
+			continue
+		}
+		peerChan <- *peerAddress
+	}
 	return nil
 }
 
@@ -267,6 +294,7 @@ func (p *Peer) listener(stream network.Stream) {
 
 	remotePeerData, _ := p.peerstore.ActivatePeer(remotePeerStr)
 	remotePeerData.SetMultiaddr(remoteMA)
+	remotePeerData.ObserveNetwork()
 
 	// Create a buffer stream for non blocking read and write.
 	reader := bufio.NewReader(stream)
@@ -575,6 +603,7 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
 		fmt.Println("[OPEN STREAM] Opening stream failed")
 		return nil
 	}
+	peerData.ObserveNetwork()
 
 	return stream
 }
