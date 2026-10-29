@@ -19,6 +19,10 @@ import (
 func main() {
 
 	cfg := utils.ParseFlags()
+	if cfg.ShowCatchupVersion {
+		fmt.Println("1")
+		return
+	}
 
 	if cfg.ShowHelp {
 		fmt.Println("This is the P2P component of the Stratosphere Linux IPS.")
