@@ -3,12 +3,14 @@ package peer
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/stratosphereips/p2p4slips/database"
 )
 
 type PeerUpdateStruct struct {
+	Catchup             bool    `json:"catchup"`
 	PeerID              string  `json:"peerid"`
 	Ip                  string  `json:"ip,omitempty"`
 	Reliability         float64 `json:"reliability"`
@@ -74,6 +76,7 @@ func SharePeerDataUpdate(data *PeerData) {
 		MessageType: "peer_update",
 		MessageContents: PeerUpdateStruct{
 			PeerID:              peerID,
+			Catchup:             strings.Contains(data.Version, "catchup1"),
 			Ip:                  ip,
 			Reliability:         reliability,
 			ReliabilityObserved: len(data.BasicInteractions) > 0,

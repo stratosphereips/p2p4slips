@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -25,20 +26,25 @@ import (
 )
 
 type Peer struct {
-	host          host.Host
-	port          int
-	hostname      string
-	protocol      string
-	rendezVous    string
-	ctx           context.Context
-	peerstore     PeerStore
-	privKey       crypto.PrivKey
-	keyFile       string
-	resetKey      bool
-	peerstoreFile string
-	closing       bool
+	host           host.Host
+	port           int
+	hostname       string
+	protocol       string
+	rendezVous     string
+	ctx            context.Context
+	peerstore      PeerStore
+	privKey        crypto.PrivKey
+	keyFile        string
+	resetKey       bool
+	peerstoreFile  string
+	closing        bool
+	catchupEnabled bool
 	// mdns is the running peer discovery service, closed on shutdown
-	mdns io.Closer
+	mdns          io.Closer
+	catchupMu     sync.Mutex
+	catchupWindow time.Time
+	catchupCount  int
+	catchupPeers  map[string]int
 }
 
 // newNoiseTransport creates Noise without early muxer negotiation for older
@@ -53,16 +59,17 @@ func newNoiseTransport(
 
 func NewPeer(cfg *utils.Config) *Peer {
 	p := &Peer{
-		port:          cfg.ListenPort,
-		hostname:      cfg.ListenHost,
-		protocol:      cfg.ProtocolID,
-		rendezVous:    cfg.RendezvousString,
-		peerstore:     PeerStore{},
-		privKey:       nil,
-		keyFile:       cfg.KeyFile,
-		resetKey:      cfg.ResetKeys,
-		peerstoreFile: cfg.PeerstoreFile,
-		closing:       false,
+		port:           cfg.ListenPort,
+		hostname:       cfg.ListenHost,
+		protocol:       cfg.ProtocolID,
+		rendezVous:     cfg.RendezvousString,
+		peerstore:      PeerStore{},
+		privKey:        nil,
+		keyFile:        cfg.KeyFile,
+		resetKey:       cfg.ResetKeys,
+		peerstoreFile:  cfg.PeerstoreFile,
+		closing:        false,
+		catchupEnabled: cfg.CatchupEnabled,
 	}
 	return p
 }
@@ -85,6 +92,9 @@ func (p *Peer) PeerInit(bootstrapPeers string) error {
 	// link to a listener for new connections
 	p.host.SetStreamHandler(protocol.ID(p.protocol),
 		p.listener)
+	if p.catchupEnabled {
+		p.host.SetStreamHandler(protocol.ID(p.protocol+"/catchup/1"), p.listener)
+	}
 
 	p.peerstore = PeerStore{Store: p.host.Peerstore(),
 		SaveFile: p.peerstoreFile}
@@ -297,9 +307,12 @@ func (p *Peer) listener(stream network.Stream) {
 	remotePeerData.ObserveNetwork()
 
 	// Create a buffer stream for non blocking read and write.
-	reader := bufio.NewReader(stream)
-
-	str, err := reader.ReadString('\n')
+	limit := int64(512 * 1024)
+	if stream.Protocol() == protocol.ID(p.protocol+"/catchup/1") {
+		limit = 96 * 1024
+	}
+	_ = stream.SetReadDeadline(time.Now().Add(5 * time.Second))
+	str, err := readLimitedLine(stream, limit)
 
 	if err != nil {
 		fmt.Println("Error reading from buffer")
@@ -351,7 +364,11 @@ func (p *Peer) listener(stream network.Stream) {
 		rawDecodedText, err := base64.StdEncoding.DecodeString(str)
 		if err == nil {
 			p.refreshAuthenticatedConnection(stream.Conn())
-			fmt.Printf("Received from [ %s ] : %s\n", remotePeer, rawDecodedText)
+			if _, catchup := catchupMessage(str); catchup {
+				fmt.Printf("Catch-up received from [ %s ] : %d bytes\n", remotePeer, len(rawDecodedText))
+			} else {
+				fmt.Printf("Received from [ %s ] : %s\n", remotePeer, rawDecodedText)
+			}
 		}
 
 		//now forward this msg to slips p2p module to deal with it
@@ -364,7 +381,7 @@ func (p *Peer) sayHello(peerData *PeerData) {
 		return
 	}
 
-	response, ok := p.sendMessageToPeerData(peerData, "hello version1\n", 10*time.Second)
+	response, ok := p.sendMessageToPeerData(peerData, p.helloMessage(), 10*time.Second)
 
 	if !ok {
 		return
@@ -409,7 +426,7 @@ func (p *Peer) handleHello(remotePeerData *PeerData, stream network.Stream, comm
 		remotePeerData.AddBasicInteraction(0)
 	}
 
-	_, ok := p.sendMessageToStream(stream, "hello version1\n", 0)
+	_, ok := p.sendMessageToStream(stream, p.helloMessage(), 0)
 
 	if !ok {
 		fmt.Println("Something went wrong when sending hello reply")
@@ -483,6 +500,16 @@ func (p *Peer) handleGoodbye(remotePeerData *PeerData) {
 }
 
 func (p *Peer) handleGenericMessage(peerID string, message string) {
+	if _, ok := catchupMessage(message); ok {
+		if !p.allowCatchup(peerID) {
+			return
+		}
+		transformed, err := p.transformCatchup(message, false)
+		if err != nil {
+			return
+		}
+		message = transformed
+	}
 	report := &ReportStruct{
 		Reporter:  peerID,
 		ReportTme: time.Now().Unix(),
@@ -540,16 +567,32 @@ func (p *Peer) pingLoop() {
 // return response string: the response sent by the peer. Empty string if timeout is zero or if there were errors
 // return success bool: true if everything went smoothly, false in case of errors (or no reply from peer)
 func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout time.Duration) (string, bool) {
+	streamProtocol := protocol.ID(p.protocol)
+	if _, ok := catchupMessage(message); ok {
+		if !p.allowCatchup("sent:" + peerData.PeerID) {
+			return "", false
+		}
+		transformed, err := p.transformCatchup(message, true)
+		if err != nil {
+			return "", false
+		}
+		message = transformed
+		streamProtocol = protocol.ID(p.protocol + "/catchup/1")
+	}
 
 	// log the sent msg
 	rawDecodedText, err := base64.StdEncoding.DecodeString(message)
 	if err == nil {
-		fmt.Printf("Sent to [ %s ] : %s \n", peerData.PeerID, string(rawDecodedText))
+		if streamProtocol == protocol.ID(p.protocol+"/catchup/1") {
+			fmt.Printf("Catch-up sent to [ %s ] : %d bytes\n", peerData.PeerID, len(rawDecodedText))
+		} else {
+			fmt.Printf("Sent to [ %s ] : %s \n", peerData.PeerID, string(rawDecodedText))
+		}
 	}
 	//fmt.Println("sending ", message, " to:", peerData.PeerID)
 
 	// open stream
-	stream := p.openStreamFromPeerData(peerData)
+	stream := p.openStreamFromPeerDataProtocol(peerData, streamProtocol)
 	// close stream when this function exits (useful to have it here, since there are multiple returns)
 	defer p.closeStream(stream)
 
@@ -576,6 +619,11 @@ func (p *Peer) sendMessageToPeerData(peerData *PeerData, message string, timeout
 // peerData: data of the target peer
 // return stream network.Stream: a stream with the given peer, or nil in case of errors
 func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
+	return p.openStreamFromPeerDataProtocol(peerData, protocol.ID(p.protocol))
+}
+
+// openStreamFromPeerDataProtocol negotiates one exact stream protocol with a known peer.
+func (p *Peer) openStreamFromPeerDataProtocol(peerData *PeerData, streamProtocol protocol.ID) network.Stream {
 	//fmt.Printf("DEBUGGINGGG %+v\n", peerData)
 	remoteMA := peerData.LastMultiAddress
 
@@ -598,7 +646,7 @@ func (p *Peer) openStreamFromPeerData(peerData *PeerData) network.Stream {
 	p.host.Peerstore().AddAddrs(remotePeer.ID, remotePeer.Addrs, peerstore.TempAddrTTL)
 
 	// open stream
-	stream, err := p.host.NewStream(p.ctx, remotePeer.ID, protocol.ID(p.protocol))
+	stream, err := p.host.NewStream(p.ctx, remotePeer.ID, streamProtocol)
 	if err != nil {
 		fmt.Println("[OPEN STREAM] Opening stream failed")
 		return nil

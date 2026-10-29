@@ -5,23 +5,25 @@ import (
 )
 
 type Config struct {
-	RendezvousString string
-	ProtocolID       string
-	KeyFile          string
-	PeerstoreFile    string
-	RenameWithPort   bool
-	ListenHost       string
-	ListenPort       int
-	ResetKeys        bool
-	RedisDb          string
-	RedisAuthConf    string
-	RedisDelete      bool
-	RedisChannelPyGo string
-	RedisChannelGoPy string
-	SlipsVersion     string
-	BootstrapPeers   string
-	RunTests         bool
-	ShowHelp         bool
+	RendezvousString   string
+	ProtocolID         string
+	KeyFile            string
+	PeerstoreFile      string
+	RenameWithPort     bool
+	ListenHost         string
+	ListenPort         int
+	ResetKeys          bool
+	RedisDb            string
+	RedisAuthConf      string
+	RedisDelete        bool
+	RedisChannelPyGo   string
+	RedisChannelGoPy   string
+	SlipsVersion       string
+	BootstrapPeers     string
+	RunTests           bool
+	ShowHelp           bool
+	ShowCatchupVersion bool
+	CatchupEnabled     bool
 }
 
 func ParseFlags() *Config {
@@ -60,6 +62,8 @@ func ParseFlags() *Config {
 	flag.StringVar(&c.BootstrapPeers, "bootstrap-peers", "", "Comma-separated authenticated peer multiaddresses to dial at startup")
 
 	flag.BoolVar(&c.ShowHelp, "help", false, "Display Help")
+	flag.BoolVar(&c.ShowCatchupVersion, "catchup-version", false, "Print the authenticated network catch-up protocol version")
+	flag.BoolVar(&c.CatchupEnabled, "catchup-enabled", true, "Advertise and accept network catch-up exchanges")
 
 	flag.Parse()
 	return c
