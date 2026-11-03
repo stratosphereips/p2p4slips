@@ -19,6 +19,10 @@ import (
 func main() {
 
 	cfg := utils.ParseFlags()
+	if cfg.ShowLocalDialVersion {
+		fmt.Println("1")
+		return
+	}
 	if cfg.ShowCatchupVersion {
 		fmt.Println("1")
 		return

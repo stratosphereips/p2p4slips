@@ -32,3 +32,10 @@ This program is called from the slips P2P module. Save files for Peer storage an
 Pigeon uses the Noise security protocol and negotiates the stream muxer after
 the secure handshake. This keeps it interoperable with older Slips Pigeon
 builds that do not support early muxer negotiation inside Noise.
+
+Discovered and cached TCP dial addresses must belong to a currently connected
+local subnet. Every outgoing libp2p dial is gated, including addresses learned
+through identification, so another peer's Docker bridge is not contacted from
+an unrelated Wi-Fi network. Discovery also drops loopback addresses unless
+Pigeon explicitly listens on loopback for local development. Run
+`./p2p4slips -local-dial-version` to check for this policy.

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,7 @@ type Peer struct {
 	peerstoreFile  string
 	closing        bool
 	catchupEnabled bool
+	dialGater      *localDialGater
 	// mdns is the running peer discovery service, closed on shutdown
 	mdns          io.Closer
 	catchupMu     sync.Mutex
@@ -156,9 +158,14 @@ func (p *Peer) p2pInit(keyFile string, keyReset bool) error {
 	// host is limited to the TCP transport: slips records every
 	// authenticated peer connection as a TCP 5-tuple, and relays, QUIC and
 	// the other default transports would only add listeners it can't track.
+	p.dialGater = &localDialGater{
+		networks:      connectedNetworks,
+		allowLoopback: net.ParseIP(p.hostname).IsLoopback(),
+	}
 	p.host, err = libp2p.New(
 		libp2p.ListenAddrs(sourceMultiAddr),
 		libp2p.Identity(prvKey),
+		libp2p.ConnectionGater(p.dialGater),
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Security(noise.ID, newNoiseTransport),
 		libp2p.DisableRelay(),
@@ -191,6 +198,7 @@ func (p *Peer) discoverPeers(bootstrapPeers string) error {
 				return
 			}
 			peerAddress := <-peerChan // will block until we discover a peerAddress
+			peerAddress.Addrs = p.dialGater.filter(peerAddress.Addrs)
 			peerId := peerAddress.ID.String()
 			fmt.Println(">>> Found peerAddress:", peerId)
 
